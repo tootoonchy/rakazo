@@ -20,7 +20,8 @@ three things more. This page says which are built, how they are set, and what is
   50%, 80% and all of its credits: what work took since credits were last added, measured
   against that plus what is left. Adding credits starts the count again, also for someone who
   was away when they were added. The app reads the balance again whenever the server signals
-  that runs changed, so a level reached while the app stays open is announced then. An owner is offered
+  that runs changed, so a level reached while the app stays open is announced then. A finished
+  run signals every Space of its organization, because the credits are shared. An owner is offered
   the billing settings from the alert. The service API reports the same level as `alert_level`
   on `GET /api/v1/service/credits`. No email is sent.
 - **Cheap models by default, premium by opt-in.** `PREMIUM_MODEL_OUTPUT_USD` is a price in
