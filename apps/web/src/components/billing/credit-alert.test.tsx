@@ -4,6 +4,7 @@ import { Toaster } from "@rakazo/ui-web";
 import type { ReactNode } from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { resetCreditAlertSessionForTests, useCreditAlert } from "./credit-alert";
 
@@ -56,16 +57,29 @@ const credits = (leftUsd: number, usedUsd: number, owner = true, addedAt = "2027
     creditPurchasesEnabled: true,
   }) as BillingStatus;
 
-async function show(status: BillingStatus | null) {
-  billing = status;
+let location = "";
+function Location() {
+  const { pathname, search } = useLocation();
+  location = pathname + search;
+  return null;
+}
+
+/** The page as it is laid out: the toaster and the routes share one router; the shell comes and goes. */
+async function page(shell: boolean) {
   await act(async () =>
     root.render(
-      <>
+      <MemoryRouter initialEntries={["/app/artifacts"]}>
         <Toaster />
-        <Probe />
-      </>,
+        <Location />
+        {shell ? <Probe /> : null}
+      </MemoryRouter>,
     ),
   );
+}
+
+async function show(status: BillingStatus | null) {
+  billing = status;
+  await page(true);
 }
 
 const alert = () => document.querySelector('[data-testid="credit-alert"]');
@@ -164,7 +178,7 @@ it("keeps its notice when the shell mounts again", async () => {
   await vi.waitFor(() => expect(alert()?.textContent).toContain("80% of your credits are used."));
   // The shell can unmount and mount again (a Space switch); the level is already seen, so the
   // notice must stay rather than vanish for good.
-  await act(async () => root.render(<Toaster />));
+  await page(false);
   const fromNewShell = vi.fn();
   probeAction = fromNewShell;
   await show(credits(20, 80));
@@ -173,4 +187,14 @@ it("keeps its notice when the shell mounts again", async () => {
   await act(async () => button("Add credits")?.click());
   expect(fromNewShell).toHaveBeenCalledTimes(1);
   expect(onAddCredits).not.toHaveBeenCalled();
+});
+
+it("goes to billing in the shell when pressed on a page outside it", async () => {
+  await show(credits(20, 80));
+  await vi.waitFor(() => expect(alert()?.textContent).toContain("80% of your credits are used."));
+  // The owner opens a page that is not the shell; the notice stays, with no shell to ask.
+  await page(false);
+  await act(async () => button("Add credits")?.click());
+  expect(onAddCredits).not.toHaveBeenCalled();
+  expect(location).toBe("/app?settings=billing");
 });

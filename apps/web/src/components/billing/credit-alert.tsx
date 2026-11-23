@@ -4,6 +4,8 @@ import type { CreditAlertLevel } from "@rakazo/contracts";
 import { creditAlertLevel, modelCreditsUsd } from "@rakazo/contracts";
 import { Button, toast } from "@rakazo/ui-web";
 import { useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import { searchString, withShellOverlay } from "../../pages/shell/shell-overlay-url";
 import { CREDIT_ALERT_TOAST_ID, useBilling } from "./SubscriptionGate";
 
 const TOAST_ID = CREDIT_ALERT_TOAST_ID;
@@ -51,7 +53,11 @@ function remember(key: string, seen: Seen) {
 
 // The mounted shell's way to the billing settings. An open notice outlives a shell that unmounts,
 // so its button asks for the current one when pressed rather than keeping the one it was made by.
+// On a page outside the shell there is none, and the button goes to the shell with them open.
 let openBilling: (() => void) | null = null;
+const BILLING_IN_SHELL = `/app${searchString(
+  withShellOverlay(new URLSearchParams(), { kind: "settings", section: "billing", spaceId: null }),
+)}`;
 
 export function resetCreditAlertSessionForTests() {
   seenThisSession.clear();
@@ -99,35 +105,27 @@ export function useCreditAlert(onAddCredits: () => void) {
     }
     if (!announce) return;
     open.current = about;
-    toast.custom(
-      () => (
-        <CreditAlert
-          level={level as CreditAlertLevel}
-          onAddCredits={canAdd ? () => openBilling?.() : undefined}
-        />
-      ),
-      {
-        id: TOAST_ID,
-        // The default bottom-right corner covers the composer.
-        position: "top-right",
-        duration: Number.POSITIVE_INFINITY,
-        onDismiss: () => {
-          if (open.current === about) open.current = null;
-        },
+    toast.custom(() => <CreditAlert level={level as CreditAlertLevel} canAdd={canAdd} />, {
+      id: TOAST_ID,
+      // The default bottom-right corner covers the composer.
+      position: "top-right",
+      duration: Number.POSITIVE_INFINITY,
+      onDismiss: () => {
+        if (open.current === about) open.current = null;
       },
-    );
+    });
   }, [status, spaceId, level, refill, canAdd]);
 }
 
-function CreditAlert({
-  level,
-  onAddCredits,
-}: {
-  level: CreditAlertLevel;
-  onAddCredits?: () => void;
-}) {
+function CreditAlert({ level, canAdd }: { level: CreditAlertLevel; canAdd: boolean }) {
   const { t } = useLingui();
+  const navigate = useNavigate();
   const close = () => toast.dismiss(TOAST_ID);
+  const addCredits = () => {
+    close();
+    if (openBilling) openBilling();
+    else navigate(BILLING_IN_SHELL);
+  };
   return (
     <aside
       aria-label={t`Credits`}
@@ -145,13 +143,8 @@ function CreditAlert({
         <Button variant="ghost" onClick={close}>
           <Trans>Dismiss</Trans>
         </Button>
-        {onAddCredits ? (
-          <Button
-            onClick={() => {
-              close();
-              onAddCredits();
-            }}
-          >
+        {canAdd ? (
+          <Button onClick={addCredits}>
             {level === 100 ? <Trans>Top up to continue</Trans> : <Trans>Add credits</Trans>}
           </Button>
         ) : null}
