@@ -37,11 +37,19 @@ const READS: Record<ReadChangeKind, readonly Procedure[]> = {
   ],
 };
 
+/**
+ * Modified by Agental: fired on the window when the server says runs changed. Reads kept outside
+ * the query cache (the billing status, whose credits a run just took) listen for it.
+ */
+export const RUNS_CHANGED_EVENT = "rakazo:runs-changed";
+
 export const isReadChangeKind = (kind: string): kind is ReadChangeKind =>
   Object.hasOwn(READS, kind);
 
 /** Reads again what the server says may have changed; only screens showing it refetch. */
 export function spaceChanged(kind: ReadChangeKind, client = queryClient): Promise<void> {
+  if (kind === "runs" && typeof window !== "undefined")
+    window.dispatchEvent(new Event(RUNS_CHANGED_EVENT));
   const procedures = READS[kind].map((procedure) => procedure.join("."));
   const filters: QueryFilters = {
     predicate: ({ queryKey: [path] }) => {

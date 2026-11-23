@@ -17,6 +17,14 @@ three things more. This page says which are built, how they are set, and what is
   sets it for one Space's organization; `null` returns it to `DAILY_CREDIT_CAP_CENTS`. The change
   is written to the billing audit journal. `GET` on the same path shows the cap in force and what
   the day has taken so far.
+- **Usage alerts, in the app only.** A member is told once when their organization has used
+  50%, 80% and all of its credits: what work took since credits were last added, measured
+  against that plus what is left. Adding credits starts the count again, also for someone who
+  was away when they were added. The app reads the balance again whenever the server signals
+  that runs changed, so a level reached while the app stays open is announced then. A finished
+  run signals every Space of its organization, because the credits are shared. An owner is offered
+  the billing settings from the alert. The service API reports the same level as `alert_level`
+  on `GET /api/v1/service/credits`. No email is sent.
 - **Cheap models by default, premium by opt-in.** `PREMIUM_MODEL_OUTPUT_USD` is a price in
   dollars per million output tokens. A model the deployment pays for at or above it is premium,
   and credits run it only for an organization the operator has turned premium models on for:

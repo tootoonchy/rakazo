@@ -23,6 +23,11 @@ vi.mock("../../lib/query/rpc", () => ({
   SPACE_SELECTED_EVENT: "rakazo:space-selected",
 }));
 vi.mock("../../lib/bootstrap", () => ({ peekInitialBootstrap: () => undefined }));
+const dismissToast = vi.hoisted(() => vi.fn());
+vi.mock("@rakazo/ui-web", async (original) => ({
+  ...(await original<typeof import("@rakazo/ui-web")>()),
+  toast: { dismiss: dismissToast },
+}));
 vi.mock("../../pages/auth/Paywall", () => ({
   PaywallPage: ({ client }: { client?: { spaceId?: string | null } }) => (
     <div>{client?.spaceId ? `paywall ${client.spaceId}` : "paywall"}</div>
@@ -103,6 +108,49 @@ it("shows the paywall without access and opens once a recheck finds access", asy
     await flush();
   });
   expect(container.textContent).toBe("app");
+  act(() => root.unmount());
+});
+
+it("reads the balance again when the server says runs changed, for an organization on credits", async () => {
+  api.me.mockResolvedValue({ billingEnabled: true, spaceId: "space-1" });
+  api.status.mockResolvedValue({ access: true, funding: "credits", balanceUsd: 5 });
+  const { root } = await renderGate(true);
+  const reads = api.status.mock.calls.length;
+  await act(async () => {
+    window.dispatchEvent(new Event("rakazo:runs-changed"));
+    await flush();
+  });
+  expect(api.status).toHaveBeenCalledTimes(reads + 1);
+
+  // Someone on their own key has no balance to watch, so the signal reads nothing.
+  api.status.mockResolvedValue({ access: true, funding: "byok", balanceUsd: 0 });
+  await act(async () => {
+    window.dispatchEvent(new Event("focus"));
+    await flush();
+  });
+  const afterSwitch = api.status.mock.calls.length;
+  await act(async () => {
+    window.dispatchEvent(new Event("rakazo:runs-changed"));
+    await flush();
+  });
+  expect(api.status).toHaveBeenCalledTimes(afterSwitch);
+  await act(async () => root.unmount());
+});
+
+it("takes the credit notice down when the paywall replaces the app", async () => {
+  api.me.mockResolvedValue({ billingEnabled: true, spaceId: "space-1" });
+  api.status.mockResolvedValue({ access: true, funding: "credits", balanceUsd: 1 });
+  const { container, root } = await renderGate(true);
+  expect(dismissToast).not.toHaveBeenCalled();
+
+  // The last credits are used and there is no plan: access ends.
+  api.status.mockResolvedValue({ access: false, funding: "credits", balanceUsd: 0 });
+  await act(async () => {
+    window.dispatchEvent(new Event("rakazo:runs-changed"));
+    await flush();
+  });
+  expect(container.textContent).toBe("paywall space-1");
+  expect(dismissToast).toHaveBeenCalledWith("credit-alert");
   act(() => root.unmount());
 });
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { BillingStatus } from "./billing.js";
-import { modelCreditsUsd } from "./billing.js";
+import { creditAlertLevel, modelCreditsUsd } from "./billing.js";
 import { planUsagePercent } from "./usage.js";
 
 describe("modelCreditsUsd", () => {
@@ -15,6 +15,21 @@ describe("modelCreditsUsd", () => {
   it("shows a credit plan's balance, even when it is spent, and a balance left after switching", () => {
     expect(modelCreditsUsd(status({ funding: "credits", balanceUsd: 0 }))).toBe(0);
     expect(modelCreditsUsd(status({ funding: "byok", balanceUsd: 4.5 }))).toBe(4.5);
+  });
+});
+
+describe("creditAlertLevel", () => {
+  it("reports the highest share of the credits reached", () => {
+    expect(creditAlertLevel(60, 40)).toBeNull();
+    expect(creditAlertLevel(50, 50)).toBe(50);
+    expect(creditAlertLevel(20, 80)).toBe(80);
+    expect(creditAlertLevel(0.01, 99.99)).toBe(80);
+    expect(creditAlertLevel(0, 100)).toBe(100);
+  });
+
+  it("stays quiet without credits or before any were used", () => {
+    expect(creditAlertLevel(null, 30)).toBeNull();
+    expect(creditAlertLevel(0, 0)).toBeNull();
   });
 });
 

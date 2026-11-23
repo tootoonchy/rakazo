@@ -46,6 +46,7 @@ import {
   byokFreeUntil,
   createBillingAccount,
   creditAccount,
+  creditsUsedSinceAdded,
   expireModelCredits,
   extendByokTrialCheckout,
   hasBillingAccess,
@@ -731,13 +732,17 @@ export function createBillingService(deps: {
             getLogger().error("access grant failed", error),
           );
         const sized = supportsComputerSizing();
-        const [credits, account, computerAllowance, days, hadTrial] = await Promise.all([
-          unexpiredCreditAccount(prisma, organizationId),
-          billingAccountForOrganization(prisma, organizationId),
-          deps.sandbox ? sandboxAllowance({ prisma, sandbox: deps.sandbox }, organizationId) : null,
-          trialDays(organizationId),
-          organizationOwnerHadTrial(prisma, organizationId, "byok"),
-        ]);
+        const [credits, creditsUsed, account, computerAllowance, days, hadTrial] =
+          await Promise.all([
+            unexpiredCreditAccount(prisma, organizationId),
+            creditsUsedSinceAdded(prisma, organizationId),
+            billingAccountForOrganization(prisma, organizationId),
+            deps.sandbox
+              ? sandboxAllowance({ prisma, sandbox: deps.sandbox }, organizationId)
+              : null,
+            trialDays(organizationId),
+            organizationOwnerHadTrial(prisma, organizationId, "byok"),
+          ]);
         const freeUntil =
           credits.mode === "byok" &&
           BYOK_TIERS.standard.monthlyPriceCents !== null &&
@@ -757,6 +762,8 @@ export function createBillingService(deps: {
                 ? "credits"
                 : null,
           balanceUsd: Number(credits.balanceMicros) / MICROS_PER_DOLLAR,
+          creditsUsedUsd: Number(creditsUsed.usedMicros) / MICROS_PER_DOLLAR,
+          creditsAddedAt: creditsUsed.addedAt?.toISOString() ?? null,
           monthlyAmountCents: account?.creditAmountCents ?? null,
           creditPurchasesEnabled: deps.managedModelsAvailable ?? true,
           byokPriceCents:

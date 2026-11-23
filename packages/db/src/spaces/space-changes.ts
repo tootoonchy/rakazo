@@ -1,7 +1,9 @@
 import type { RealtimeFanout } from "@rakazo/adapter-kit";
 import { SpaceChangeKind } from "@rakazo/contracts";
-import { getLogger } from "@rakazo/logging";
+import { bestEffort, getLogger } from "@rakazo/logging";
+import type { PrismaClient } from "../database/client.js";
 import { retryWhileDatabaseUnavailable } from "../database/database-outage.js";
+import { runAsSystem } from "../database/row-security.js";
 import { ChangeLatch } from "../threads/event-stream.js";
 
 const IDLE_WAIT_MS = 60_000;
@@ -31,6 +33,33 @@ export function publishSpaceChange(
       ...options,
     }).catch((error: unknown) => getLogger().warn("space change signal not published", { error }));
   return Promise.resolve();
+}
+
+/**
+ * Modified by Agental: signals that a Space's runs changed. A run takes credits, and credits
+ * belong to the organization, so its other Spaces are told as well: a member watching one of
+ * them then reads the balance again. An organization with one Space, the usual case, costs one
+ * read and no extra signal, and a failed read never holds up the run that finished.
+ */
+export async function publishRuns(
+  prisma: PrismaClient,
+  realtime: RealtimeFanout | undefined,
+  spaceId: string,
+): Promise<void> {
+  await publishSpaceChange(realtime, spaceId, "runs");
+  if (!realtime) return;
+  const siblings = await bestEffort(
+    "find an organization's other Spaces",
+    runAsSystem(
+      "signal an organization's other Spaces",
+      () =>
+        prisma.$queryRaw<{ id: string }[]>`
+        SELECT other.id FROM spaces AS own
+        JOIN spaces AS other ON other."organizationId" = own."organizationId"
+        WHERE own.id = ${spaceId} AND other.id <> ${spaceId}`,
+    ),
+  );
+  for (const sibling of siblings ?? []) await publishSpaceChange(realtime, sibling.id, "runs");
 }
 
 /**

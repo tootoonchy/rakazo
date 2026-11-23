@@ -1,6 +1,7 @@
 import type { Space } from "@rakazo/contracts";
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import type { SetURLSearchParams } from "react-router-dom";
+import { useCreditAlert } from "../../components/billing/credit-alert";
 import { desktopBridge } from "../../lib/platform/desktop";
 import type { ImportSetupTarget } from "./bots/import-setup-card";
 import type { SettingsSection, ShellOverlay } from "./shell-overlay-url";
@@ -47,6 +48,8 @@ export function useShellSettings({
   const openSettingsRef = useRef(openSettings);
   openSettingsRef.current = openSettings;
   useEffect(() => desktopBridge()?.settings?.onOpen(() => openSettingsRef.current("general")), []);
+  // Modified by Agental: the credit alert offers the billing settings, so it lives where they open.
+  useCreditAlert(() => openSettings("billing"));
 
   // An import's setup checklist re-checks on each thread refresh, so refresh once setup closes.
   const importSetupOpen = useRef(false);
