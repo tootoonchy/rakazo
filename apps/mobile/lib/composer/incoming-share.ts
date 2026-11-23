@@ -1,3 +1,4 @@
+import { BRAND } from "@rakazo/contracts/brand";
 import type { Directory } from "expo-file-system";
 import { File, Paths } from "expo-file-system";
 import type { SharePayload } from "expo-sharing";
@@ -21,7 +22,8 @@ let expiry: ReturnType<typeof setTimeout> | undefined;
 const listeners = new Set<() => void>();
 
 /** The app group in app.json where the iOS share extension copies shared files. */
-export const IOS_SHARE_APP_GROUP = "group.com.rakazo.app";
+// Modified by Agental: the shared container follows the brand's app identifier.
+export const IOS_SHARE_APP_GROUP = `group.${BRAND.appIds.ios}`;
 
 /** Only iOS builds that include the share extension have its container. */
 function iosShareContainer(): Directory | null {

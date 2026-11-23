@@ -15,6 +15,11 @@
       "development": "./src/brand/brand.ts",
       "default": "./src/brand/brand.ts"
     },
+    "./brand-desktop": {
+      "types": "./src/brand/desktop-package.ts",
+      "development": "./src/brand/desktop-package.ts",
+      "default": "./src/brand/desktop-package.ts"
+    },
     "./brand-theme": "./src/brand/theme/theme.json",
     "./local-settings": "./src/clients/local-settings.js",
     "./client-build": {

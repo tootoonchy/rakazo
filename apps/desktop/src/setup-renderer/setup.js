@@ -3,10 +3,18 @@
   document.documentElement.dataset.platform = bridge?.platform ?? "browser";
   const lang = bridge?.locale?.lang ?? "en";
   const messages = bridge?.locale?.messages ?? {};
+  // Modified by Agental: the page is written with the upstream name; a brand's replaces it.
+  const brandName = bridge?.locale?.name;
 
   /** Core's `translate`, which this plain page cannot import: English-keyed, `{name}` placeholders. */
   function t(message, values) {
-    const template = Object.hasOwn(messages, message) ? messages[message] : message;
+    const translated = Object.hasOwn(messages, message) ? messages[message] : message;
+    // The example address in the server field names the product too.
+    const template = brandName
+      ? translated
+          .replace(/\bRakazo\b/g, brandName)
+          .replace(/\brakazo(?=\.example\.com)/g, brandName.toLowerCase())
+      : translated;
     if (!values) return template;
     return template.replace(/\{([A-Za-z0-9_]+)\}/g, (match, key) =>
       Object.hasOwn(values, key) ? String(values[key]) : match,
@@ -512,6 +520,12 @@
       if (state === null) throw new Error("Setup is not active");
       defaultLocalUrl = state.defaultLocalUrl;
       cloudUrl = state.cloudUrl;
+      if (!cloudUrl) {
+        // Modified by Agental: a brand with no hosted app offers only the other two choices.
+        const cloud = document.getElementById("mode-cloud");
+        cloud.closest("label").hidden = true;
+        if (cloud.checked) document.getElementById("mode-existing").checked = true;
+      }
       if (state.saved !== null) {
         const savedCloud = state.saved.mode === "existing" && state.saved.serverUrl === cloudUrl;
         const mode = savedCloud ? "cloud" : state.saved.mode;

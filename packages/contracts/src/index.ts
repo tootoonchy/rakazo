@@ -35,6 +35,7 @@ export * from "./clients/nav-links.js";
 export * from "./clients/network-host.js";
 export * from "./clients/server-headers.js";
 export * from "./clients/server-updates.js";
+export * from "./clients/store-links.js";
 export * from "./computers/computer.js";
 export * from "./computers/computer-command.js";
 export * from "./computers/terminal.js";

@@ -125,7 +125,9 @@ export async function askForReviewIfDue(isActive: () => boolean): Promise<void> 
 /** The store page to write a review on, for official store builds. */
 export function writeReviewUrl(): string | null {
   if (!officialStoreBuild()) return null;
-  return Platform.OS === "ios" ? `${IOS_APP_STORE_URL}?action=write-review` : ANDROID_APP_STORE_URL;
+  // Modified by Agental: a brand without a listing yet has no page to review on.
+  if (Platform.OS !== "ios") return ANDROID_APP_STORE_URL || null;
+  return IOS_APP_STORE_URL ? `${IOS_APP_STORE_URL}?action=write-review` : null;
 }
 
 export function openWriteReview(): void {

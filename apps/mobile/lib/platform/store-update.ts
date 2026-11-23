@@ -1,10 +1,12 @@
 import { IOS_APP_STORE_URL } from "@rakazo/contracts";
+import { BRAND } from "@rakazo/contracts/brand";
 import { useQuery } from "@tanstack/react-query";
 import * as Application from "expo-application";
 import { Linking, Platform } from "react-native";
 import { queryClient } from "../query/query";
 
-export const OFFICIAL_BUNDLE_ID = "com.rakazo.app";
+// Modified by Agental: the official app is the brand's own listing.
+export const OFFICIAL_BUNDLE_ID = BRAND.appIds.ios;
 const STORE_LOOKUP_URL = "https://itunes.apple.com/lookup";
 
 /** True when dotted version `latest` is ahead of `current`; false when either is unreadable. */
@@ -45,7 +47,7 @@ function validStoreUrl(value: unknown): string | null {
 }
 
 function listingUrl(bundleId: string | null, listing?: StoreListing | null): string | null {
-  return listing?.url ?? (bundleId === OFFICIAL_BUNDLE_ID ? IOS_APP_STORE_URL : null);
+  return listing?.url ?? ((bundleId === OFFICIAL_BUNDLE_ID && IOS_APP_STORE_URL) || null);
 }
 
 /** The listing Apple currently offers for this bundle, or null when it cannot say. */

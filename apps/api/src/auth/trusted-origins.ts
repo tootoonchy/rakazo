@@ -1,4 +1,5 @@
 import { buildTrustedOrigins } from "@rakazo/auth";
+import { appSchemes } from "@rakazo/contracts/brand";
 import type { AppEnv } from "../env.js";
 
 /**
@@ -6,8 +7,11 @@ import type { AppEnv } from "../env.js";
  * exp:// origin is trusted: it would accept any Expo host as a redirect target.
  * The loopback entries are the Expo web dev server.
  */
+// Modified by Agental: the brand's own link scheme is trusted beside the upstream one.
+const APP_ORIGINS = appSchemes().map((scheme) => `${scheme}://`);
+
 export const MOBILE_AUTH_ORIGINS = [
-  "rakazo://",
+  ...APP_ORIGINS,
   "http://localhost:8081",
   "http://127.0.0.1:8081",
   "http://localhost:19006",
@@ -19,7 +23,7 @@ export function isTrustedOrigin(
   env: Pick<AppEnv, "webOrigin" | "apiUrl" | "authUrl"> & { extraAuthOrigins?: string[] },
 ) {
   if (!origin) return true;
-  if (origin.startsWith("rakazo://")) return true;
+  if (APP_ORIGINS.some((app) => origin.startsWith(app))) return true;
   return new Set(trustedRequestOrigins(env)).has(origin);
 }
 

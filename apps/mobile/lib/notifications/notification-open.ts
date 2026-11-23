@@ -1,3 +1,5 @@
+import { appSchemes } from "@rakazo/contracts/brand";
+
 export type NotificationRoute =
   | {
       pathname: "/thread";
@@ -63,7 +65,8 @@ export function notificationOpenTargetFromLink(url: string): NotificationRoute |
   } catch {
     return null;
   }
-  if (parsed.protocol !== "rakazo:") return null;
+  // Modified by Agental: the brand's scheme, and the upstream one native code links with.
+  if (!appSchemes().includes(parsed.protocol.slice(0, -1))) return null;
   const screen = (parsed.hostname || parsed.pathname.replace(/^\//, "")).replace(/\/$/, "");
   const data: Record<string, string> = {};
   for (const [key, value] of parsed.searchParams) data[key] = value;

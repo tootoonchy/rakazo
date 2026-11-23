@@ -1,5 +1,6 @@
 import { t } from "@lingui/core/macro";
 import { SIGNUP_SURFACE_HEADER } from "@rakazo/contracts";
+import { BRAND } from "@rakazo/contracts/brand";
 import { Platform } from "react-native";
 import { authHeaders, currentApiBase, fetchMobileJson } from "../api/api";
 import { clearSpace } from "../api/api-server";
@@ -27,7 +28,9 @@ export async function continueWithSso(
       if (apiBase !== currentApiBase() || generation !== currentSessionGeneration())
         throw new Error(t`Could not continue`);
     };
-    const callbackURL = action === "sign-in" ? "rakazo://sign-in" : "rakazo://account";
+    // Modified by Agental: the sign-in provider returns to the brand's own link scheme.
+    const scheme = BRAND.appIds.scheme;
+    const callbackURL = action === "sign-in" ? `${scheme}://sign-in` : `${scheme}://account`;
     const headers = action === "sign-in" ? {} : await authHeaders();
     requireCurrentSession();
     const previous = action === "reauthenticate" ? await sessionUser(apiBase, headers) : undefined;
@@ -77,7 +80,7 @@ export async function continueWithSso(
     if (result.type !== "success") return false;
     const callback = new URL(result.url);
     if (
-      callback.protocol !== "rakazo:" ||
+      callback.protocol !== `${scheme}:` ||
       callback.host !== new URL(callbackURL).host ||
       (callback.pathname && callback.pathname !== "/")
     )

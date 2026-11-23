@@ -1,3 +1,4 @@
+import { brandText } from "@rakazo/contracts/brand";
 import type { TextDirection } from "@rakazo/core/text-direction";
 import { textDirectionForLocale } from "@rakazo/core/text-direction";
 import { translate } from "@rakazo/core/translate";
@@ -47,7 +48,8 @@ let writtenLocale: string | null = null;
 let saving: Promise<void> = Promise.resolve();
 
 export function t(message: string, values?: Record<string, string | number>): string {
-  return translate(desktopMessages(), message, values);
+  // Modified by Agental: text is written with the upstream name; the brand's is swapped in here.
+  return brandText(translate(desktopMessages(), message, values));
 }
 
 export function desktopLocale(): DesktopLocale {

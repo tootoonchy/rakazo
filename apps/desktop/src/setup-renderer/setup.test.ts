@@ -83,7 +83,12 @@ interface Harness {
   resolveSave: (result: DesktopSetupResult) => void;
 }
 
-function mount(saved: DesktopSetup | null, locale = ENGLISH, platform = "linux"): Harness {
+function mount(
+  saved: DesktopSetup | null,
+  locale = ENGLISH,
+  platform = "linux",
+  cloudUrl = CLOUD_URL,
+): Harness {
   document.body.innerHTML = setupBody ?? "";
   const checkCalls: Array<Deferred<DesktopReachability>> = [];
   const startResult = deferred<DesktopLocalStackState>();
@@ -139,7 +144,7 @@ function mount(saved: DesktopSetup | null, locale = ENGLISH, platform = "linux")
   new Function(setupScript)();
 
   const initState = stateCalls.shift();
-  initState?.resolve({ defaultLocalUrl: DEFAULT_LOCAL_URL, cloudUrl: CLOUD_URL, saved });
+  initState?.resolve({ defaultLocalUrl: DEFAULT_LOCAL_URL, cloudUrl, saved });
   return {
     nextCheck: () => {
       const call = checkCalls.shift();
@@ -169,8 +174,9 @@ async function boot(
   saved: DesktopSetup | null,
   locale = ENGLISH,
   platform = "linux",
+  cloudUrl = CLOUD_URL,
 ): Promise<Harness> {
-  const ui = mount(saved, locale, platform);
+  const ui = mount(saved, locale, platform, cloudUrl);
   await flush(); // init reaches its stack.state call only after its state await resumes
   ui.resolveStackState(stackState("idle"));
   await flush();
@@ -577,6 +583,14 @@ describe("setup", () => {
       expect(element<HTMLButtonElement>("continue").disabled).toBe(false);
     });
   }
+
+  it("names the brand and offers no hosted choice when the brand has none", async () => {
+    await boot(null, { ...ENGLISH, name: "Example" }, "linux", "");
+    expect(document.querySelector("h1")?.textContent).toBe("Welcome to Example");
+    expect(element<HTMLInputElement>("server-url").placeholder).toBe("https://example.example.com");
+    expect(document.querySelector<HTMLElement>('label[for="mode-cloud"]')?.hidden).toBe(true);
+    expect(element<HTMLInputElement>("mode-existing").checked).toBe(true);
+  });
 
   it("lays a right-to-left language out right to left", async () => {
     await boot(null, { lang: "he", dir: "rtl", messages: HE_MESSAGES });
