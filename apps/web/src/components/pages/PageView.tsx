@@ -1,11 +1,17 @@
 import { useLingui } from "@lingui/react/macro";
+import { useTimeout } from "@rakazo/chat-ui/hooks";
 import { PageIcon } from "@rakazo/chat-ui/web";
+import type { PageSectionAnchor } from "@rakazo/contracts";
 import { PAGE_TITLE_MAX_LENGTH } from "@rakazo/contracts";
-import { Dialog, DialogClose, DialogContent, DialogTitle } from "@rakazo/ui-web";
+import { cn, Dialog, DialogClose, DialogContent, DialogTitle } from "@rakazo/ui-web";
 import { Pencil, X } from "lucide-react";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { desktopBridge, windowChromeKind } from "../../lib/desktop";
+import { useCallback, useRef, useState } from "react";
+import {
+  DARWIN_WINDOW_CONTROLS_WIDTH_PX,
+  desktopBridge,
+  windowChromeKind,
+} from "../../lib/platform/desktop";
 import { DownloadPdfButton } from "./DownloadPdfButton";
 import { PageFrame } from "./PageFrame";
 import { PageLoading, PageNotice } from "./PageNotice";
@@ -28,6 +34,7 @@ export function PageView({
   share,
   composer,
   onReply,
+  onSections,
   returnFocus,
   compact = false,
   notice = null,
@@ -43,6 +50,7 @@ export function PageView({
   composer?: ReactNode;
   /** Takes a page's reply text into the docked composer. */
   onReply?: (text: unknown) => void;
+  onSections?: (sections: PageSectionAnchor[]) => void;
   /** Puts focus back on close; false tells the dialog it is done. */
   returnFocus?: () => boolean;
   /** Touch screens get larger round controls. */
@@ -64,17 +72,28 @@ export function PageView({
     setDrawn(false);
     setStalled(false);
   }
-  const waiting = document !== null && !drawn && notice === null;
-  useEffect(() => {
-    if (!waiting) return;
-    const timer = window.setTimeout(() => setStalled(true), FRAME_TIMEOUT_MS);
-    return () => window.clearTimeout(timer);
-  }, [waiting, attempt]);
+  const waiting = document !== null && !drawn && !stalled && notice === null;
+  useTimeout(() => setStalled(true), waiting ? FRAME_TIMEOUT_MS : null, document);
   const onDrawn = useCallback(() => setDrawn(true), []);
   // In the macOS app the window controls sit in the top-left corner over a full-window page, so
   // its top row starts below them, as the main window's rows do.
   const macChrome = !compact && windowChromeKind(desktopBridge()) === "darwin";
   const control = `grid place-items-center rounded-full p-0 border border-foreground/[0.06] text-foreground outline-none hover:bg-foreground/[0.06] focus-visible:ring-2 focus-visible:ring-ring ${compact ? "size-11" : "size-[35px]"}`;
+  // The browser close control sits 11px in. On macOS that inset starts after the traffic-light
+  // strip. The sum is a style because Tailwind only emits `left-[…]` from a complete literal.
+  const closeLeadingInsetPx = 11;
+  const closeButtonClass = cn(
+    "app-no-drag absolute z-10 grid place-items-center rounded-full border border-foreground/[0.06] text-foreground/90 outline-none print:hidden hover:bg-foreground/[0.06] focus-visible:ring-2 focus-visible:ring-ring",
+    compact ? "top-[6px] left-[6px] size-11" : "size-9",
+    !compact && (macChrome ? "top-[42px]" : "top-[6px]"),
+  );
+  const closeButtonStyle = compact
+    ? undefined
+    : {
+        left: macChrome
+          ? DARWIN_WINDOW_CONTROLS_WIDTH_PX + closeLeadingInsetPx
+          : closeLeadingInsetPx,
+      };
   return (
     <Dialog
       open={open}
@@ -86,7 +105,9 @@ export function PageView({
           !next &&
           details.reason === "escape-key" &&
           target instanceof Element &&
-          target.closest('[data-slot="popover-content"], [data-slot="dropdown-menu-content"]')
+          target.closest(
+            '[data-slot="popover-content"], [data-slot="dropdown-menu-content"], [data-slot="select-content"]',
+          )
         ) {
           details.cancel();
           return;
@@ -127,7 +148,8 @@ export function PageView({
           <DialogClose
             ref={closeButton}
             aria-label={t`Close page`}
-            className={`app-no-drag absolute z-10 grid place-items-center print:hidden ${compact ? "top-[6px] left-[6px] size-11" : `${macChrome ? "top-[42px]" : "top-[6px]"} left-[11px] size-9`} rounded-full border border-foreground/[0.06] text-foreground/90 outline-none hover:bg-foreground/[0.06] focus-visible:ring-2 focus-visible:ring-ring`}
+            className={closeButtonClass}
+            style={closeButtonStyle}
           >
             <X className={compact ? "size-6" : "size-[18px]"} strokeWidth={compact ? 2.2 : 1.7} />
           </DialogClose>
@@ -177,6 +199,7 @@ export function PageView({
                       title={title}
                       interactive
                       onReply={onReply}
+                      onSections={onSections}
                       onHeight={onDrawn}
                     />
                   </div>
@@ -235,6 +258,10 @@ function TitlePill({ title, onRename }: { title: string; onRename?: (title: stri
           onChange={(event) => setDraft(event.target.value)}
           onBlur={commit}
           onKeyDown={(event) => {
+            if (event.nativeEvent.isComposing || event.keyCode === 229) {
+              if (event.key === "Escape") event.stopPropagation();
+              return;
+            }
             if (event.key === "Enter") commit();
             if (event.key === "Escape") {
               event.stopPropagation();

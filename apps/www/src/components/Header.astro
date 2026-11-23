@@ -1,7 +1,8 @@
 ---
 import { getHomeCopy } from "../i18n/home";
 import type { HomeCopy } from "../i18n/home";
-import { DEFAULT_LOCALE, localeHomePath } from "../i18n/locales";
+import { DEFAULT_LOCALE, isLocale, localeHomePath } from "../i18n/locales";
+import { localizedHref } from "../i18n/translations";
 import type { Locale } from "../i18n/locales";
 import { BRAND_KIT_PATH, WORDMARK_SVG_PATH } from "../brand";
 import { APP_URL, GITHUB_URL } from "../site";
@@ -17,16 +18,19 @@ type Props = {
 };
 
 const { starsLabel, section } = Astro.props;
-const locale = Astro.props.locale ?? DEFAULT_LOCALE;
+const locale =
+  Astro.props.locale ?? (isLocale(Astro.currentLocale) ? Astro.currentLocale : DEFAULT_LOCALE);
 const copy = Astro.props.copy ?? getHomeCopy(locale).nav;
 const homeHref = Astro.props.homeHref ?? localeHomePath(locale);
 
 const NAV_LINKS = [
+  { href: "/download/", label: getHomeCopy(locale).footer.links.download },
   { href: "/docs/", label: copy.docs },
   { href: "/integrations/", label: copy.integrations },
   { href: "/pricing/", label: copy.pricing },
-  { href: "/blog/", label: copy.blog },
-].filter((link) => link.href !== section?.href);
+]
+  .filter((link) => link.href !== section?.href)
+  .map((link) => ({ ...link, href: localizedHref(link.href, locale) }));
 
 const currentPath = Astro.url.pathname.replace(/\/+$/, "") || "/";
 
