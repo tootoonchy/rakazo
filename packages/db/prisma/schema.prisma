@@ -2046,10 +2046,16 @@ model ComputerRun {
   endReason  String?
   /// When Rakazo last saw this stretch running: at its start and at each idle check.
   lastSeenAt DateTime?
+  /// Modified by Agental: the run's real cost per hour, in micro-dollars, when its time is taken
+  /// from its organization's credits. Null when it is not: an allowance pays, or nothing bills.
+  creditRateMicros  Int?
+  /// How far this run's time has been taken from credits. Null before the first charge.
+  creditedThroughAt DateTime?
 
   @@unique([computerId, startedAt])
   @@index([spaceId, userId, startedAt])
-  // computer_runs_open_idx (open runs by computer) is raw SQL: Prisma cannot express partial indexes.
+  // computer_runs_open_idx (open runs by computer) and computer_runs_uncredited_idx (ended runs
+  // with time still to take from credits) are raw SQL: Prisma cannot express partial indexes.
   @@map("computer_runs")
 }
 

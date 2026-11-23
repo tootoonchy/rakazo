@@ -33,7 +33,6 @@ import {
   parseComputerMode,
   planComputerSize,
   recordComputerRunEnd,
-  recordComputerRunStart,
   spaceTakesWork,
   withTransactionRetry,
 } from "@rakazo/db";
@@ -46,7 +45,7 @@ import {
   removeDeletedBotWorkspaces,
   restoreComputerWorkspace,
 } from "./computer-workspace.js";
-import { sandboxAllowanceUsedUp } from "./sandbox/sandbox-allowance.js";
+import { computerTimeUsedUp, startComputerRun } from "./sandbox/computer-credits.js";
 import {
   isSandboxDamagedError,
   isSandboxGoneError,
@@ -310,7 +309,7 @@ export async function provisionComputer(
         data: { updatedAt: new Date(), runningSince },
       });
       if (retained.count !== 1) throw busy("running_claim_lost");
-      await recordComputerRunStart(deps.prisma, existing, runningSince);
+      await startComputerRun(deps, existing, runningSince);
       const damaged = await (async () => {
         await prepare(ref);
         await ensureComputerWorkspaceLayout(
@@ -338,8 +337,9 @@ export async function provisionComputer(
 
   // A computer that bills starts only while its organization has allowance left this period.
   const startKind = (await deps.sandbox.provisionKind?.(existing.homeKey)) ?? existing.kind;
-  if (await sandboxAllowanceUsedUp(deps, { spaceId: existing.spaceId, kind: startKind }))
-    throw new SandboxAllowanceUsedError();
+  // Modified by Agental: or, where its time is taken from credits, while it has credits left.
+  const usedUp = await computerTimeUsedUp(deps, { spaceId: existing.spaceId, kind: startKind });
+  if (usedUp) throw new SandboxAllowanceUsedError(usedUp);
 
   // If we first observe abandoned "booting", remember that stamp before waiting. A concurrent
   // reclaim bumps updatedAt while state stays "booting"; fencing the claim on the pre-wait
@@ -667,8 +667,8 @@ export async function provisionComputer(
     }
     // A computer we believed running that the provider had to resume or replace was stopped
     // or lost at the provider without us.
-    await recordComputerRunStart(
-      deps.prisma,
+    await startComputerRun(
+      deps,
       { ...existing, ...sizing, kind: ref.kind, providerRef: ref.providerRef },
       runningSince,
       existing.state === "running" ? "gone" : "reconciled",

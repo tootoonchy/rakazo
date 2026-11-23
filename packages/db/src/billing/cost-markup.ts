@@ -22,6 +22,34 @@ export function costMarkup(env: NodeJS.ProcessEnv = process.env): number {
   return value;
 }
 
+/**
+ * The markup on a paid service call. A deployment that sets `COST_MARKUP` charges every kind of
+ * cost at it; without one the paid services keep `upstream`, their own markup.
+ */
+export function paidServiceMarkup(upstream: number, env: NodeJS.ProcessEnv = process.env): number {
+  return env.COST_MARKUP?.trim() ? costMarkup(env) : upstream;
+}
+
+/**
+ * `COMPUTER_USAGE_BILLING`: what pays for computer time. Unset or `allowance` is the upstream
+ * behavior: each plan includes an allowance of computer time. `credits` takes the time of
+ * organizations that run on credits from those credits instead, at the real hourly cost times
+ * `COST_MARKUP`; organizations on their own key keep their allowance. Any other value refuses to
+ * start work rather than silently giving computer time away.
+ */
+export function computersBilledToCredits(env: NodeJS.ProcessEnv = process.env): boolean {
+  const raw = env.COMPUTER_USAGE_BILLING?.trim();
+  if (!raw || raw === "allowance") return false;
+  if (raw === "credits") return true;
+  throw new Error('COMPUTER_USAGE_BILLING must be "allowance" or "credits"');
+}
+
+/** The real cost, in dollars, of a stretch of computer time at `hourlyCostMicros` an hour. */
+export function computerTimeCostUsd(hourlyCostMicros: number, from: Date, to: Date): number {
+  const hours = Math.max(0, to.getTime() - from.getTime()) / 3_600_000;
+  return (hours * hourlyCostMicros) / MICROS;
+}
+
 /** The credits (in micro-dollars) a cost takes, rounded up so a charge is never below cost. */
 export function chargedMicros(costUsd: number, provider?: string | null): bigint {
   const factor = provider === ALREADY_PRICED_PROVIDER ? 1 : costMarkup();
