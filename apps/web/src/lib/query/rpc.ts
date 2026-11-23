@@ -49,6 +49,20 @@ export function selectSpace(id: string): boolean {
   return selected;
 }
 
+/**
+ * Modified by Agental: a sign-in link from the project hub lands on `/?space=<id>`. The Space is
+ * selected and the address cleaned; the server still decides whether the person may use it.
+ */
+export function adoptSpaceFromUrl(): void {
+  if (typeof window === "undefined") return;
+  const url = new URL(window.location.href);
+  const space = url.searchParams.get("space");
+  if (!space || !/^[A-Za-z0-9_-]{1,64}$/.test(space)) return;
+  selectSpace(space);
+  url.searchParams.delete("space");
+  window.history.replaceState(null, "", url);
+}
+
 export function clearSpaceSelection(): void {
   try {
     window.localStorage.removeItem(SPACE_STORAGE_KEY);

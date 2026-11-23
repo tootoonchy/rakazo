@@ -168,6 +168,8 @@ export async function createTicket(
     description?: string;
     priority?: string;
     ownerBotId?: string;
+    /** Modified by Agental: the id another system knows the ticket by; unique in the Space. */
+    externalId?: string;
   },
 ) {
   const parsed = CreateTicketInput.safeParse({
@@ -191,6 +193,7 @@ export async function createTicket(
         assigneeBotId: data.assigneeBotId,
         createdByBotId: input.botId ?? null,
         createdByUserId: input.userId,
+        externalId: input.externalId ?? null,
       },
     });
   });

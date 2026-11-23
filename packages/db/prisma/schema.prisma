@@ -2738,9 +2738,12 @@ model Ticket {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   completedAt       DateTime?
+  /// Modified by Agental: the id another system knows this ticket by, when one created it.
+  externalId      String?
   comments        TicketComment[]
 
   @@unique([boardId, number])
+  @@unique([spaceId, externalId])
   @@index([spaceId, status])
   @@index([boardId, status])
   @@map("tickets")

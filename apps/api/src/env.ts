@@ -145,6 +145,10 @@ export interface AppEnv extends MessagingEnvironmentValues {
   emailReplyTo?: string;
   /** Mail to bots' addresses, posted by a relay; off unless the domain and secret are both set. */
   inboundEmail?: { domain: string; secret: string };
+  /** Modified by Agental: the service API a project hub provisions and drives Spaces through. */
+  serviceApi?: { secret: string };
+  /** Modified by Agental: where ticket changes are reported; off unless both are set. */
+  projectHub?: { url: string; secret: string };
   /** Billing turns on only when all three are set; self-hosted installs leave them unset. */
   stripeSecretKey: string | undefined;
   stripeWebhookSecret: string | undefined;
@@ -354,6 +358,7 @@ export function loadEnv(source: NodeJS.ProcessEnv = process.env): AppEnv {
     emailFrom: optional(source.EMAIL_FROM),
     emailReplyTo: optional(source.EMAIL_REPLY_TO),
     inboundEmail: inboundEmailFromEnv(source),
+    ...serviceFromEnv(source),
     stripeSecretKey: optional(source.STRIPE_SECRET_KEY),
     stripeWebhookSecret: optional(source.STRIPE_WEBHOOK_SECRET),
     stripePriceId: optional(source.STRIPE_PRICE_ID),
@@ -436,6 +441,29 @@ function voiceSummaryMinCharsFromEnv(value: string | undefined): number | undefi
     throw new Error("VOICE_SUMMARY_MIN_CHARS must be a positive whole number of characters");
   }
   return Number(raw);
+}
+
+/** Modified by Agental: SERVICE_API_SECRET, and PROJECT_HUB_URL with PROJECT_HUB_SECRET. */
+function serviceFromEnv(source: NodeJS.ProcessEnv): Pick<AppEnv, "serviceApi" | "projectHub"> {
+  const secret = optional(source.SERVICE_API_SECRET);
+  if (secret && (secret.length < 32 || /\s/.test(secret))) {
+    throw new Error("SERVICE_API_SECRET must be at least 32 characters with no spaces");
+  }
+  const url = optional(source.PROJECT_HUB_URL);
+  const hubSecret = optional(source.PROJECT_HUB_SECRET);
+  if (Boolean(url) !== Boolean(hubSecret)) {
+    throw new Error("Set PROJECT_HUB_URL and PROJECT_HUB_SECRET together");
+  }
+  if (url && hubSecret) {
+    const { protocol, hostname } = new URL(url);
+    const loopback = hostname === "localhost" || hostname === "127.0.0.1";
+    if (protocol !== "https:" && !loopback) throw new Error("PROJECT_HUB_URL must be an https URL");
+    if (hubSecret.length < 32) throw new Error("PROJECT_HUB_SECRET must be at least 32 characters");
+  }
+  return {
+    ...(secret ? { serviceApi: { secret } } : {}),
+    ...(url && hubSecret ? { projectHub: { url, secret: hubSecret } } : {}),
+  };
 }
 
 function inboundEmailFromEnv(source: NodeJS.ProcessEnv): AppEnv["inboundEmail"] {
