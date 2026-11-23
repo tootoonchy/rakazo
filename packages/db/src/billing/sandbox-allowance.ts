@@ -12,6 +12,7 @@ import type { PrismaClient } from "../database/client.js";
 import { Prisma } from "../database/client.js";
 import { runAsSystem, runAsSystemInTransaction } from "../database/row-security.js";
 import { hasBillingAccess } from "./billing.js";
+import { computersBilledToCredits } from "./cost-markup.js";
 
 /**
  * The own-key tier an organization's computers get: a live own-key subscription's tier, whatever
@@ -28,6 +29,36 @@ function byokTierOf(
   const live = hasBillingAccess(billing?.status ?? null);
   if (mode !== "byok" && !(live && billing?.byokPriceCents)) return null;
   return (live && ByokTierSchema.safeParse(billing?.byokTier).data) || "standard";
+}
+
+/**
+ * Modified by Agental: whether computer time is taken from the organization's credits instead of
+ * an allowance. Only where the deployment says so (`COMPUTER_USAGE_BILLING`), and only for an
+ * organization that runs on credits: one with an own-key tier, or on a trial, keeps its allowance.
+ */
+function computersFromCredits(
+  mode: string | null | undefined,
+  billing: Parameters<typeof byokTierOf>[1],
+): boolean {
+  return (
+    mode === "credits" &&
+    computersBilledToCredits() &&
+    billing?.status !== "trialing" &&
+    !byokTierOf(mode, billing)
+  );
+}
+
+/** See {@link computersFromCredits}; false for an organization that does not exist. */
+export async function chargesComputersToCredits(
+  prisma: Pick<PrismaClient, "organization">,
+  organizationId: string,
+): Promise<boolean> {
+  if (!computersBilledToCredits()) return false;
+  const organization = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: COMPUTER_SIZE_PLAN_SELECT,
+  });
+  return computersFromCredits(organization?.modelCredits?.mode, organization?.billing);
 }
 
 /**
@@ -69,6 +100,8 @@ export async function sandboxAllowancePlan(
   ]);
   if (!settings?.modelCreditsEnabled) return null;
   const billing = organization?.billing;
+  // Modified by Agental: time taken from credits has no allowance to run out of.
+  if (computersFromCredits(organization?.modelCredits?.mode, billing)) return null;
   const { live, periodStart, since } = allowancePeriod(billing, now);
   const tier = byokTierOf(organization?.modelCredits?.mode, billing);
   const creditShare = (cents: number) =>

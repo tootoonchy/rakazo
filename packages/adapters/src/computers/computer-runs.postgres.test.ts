@@ -3,11 +3,15 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { AdapterContext, JobPublisher } from "@rakazo/adapter-kit";
+import { SandboxAllowanceUsedError } from "@rakazo/adapter-kit";
+import { MODEL_CREDITS_EXHAUSTED_ERROR } from "@rakazo/core";
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
 import {
   asSystem,
   createDb,
+  creditAccount,
   reconcileComputerRuns,
+  reconcileCreditPurchase,
   recordComputerRunEnd,
   recordComputerRunStart,
   runAsSystem,
@@ -412,6 +416,85 @@ describePostgres("computer runs (PostgreSQL)", () => {
     expect(await o.runs()).toEqual([
       expect.objectContaining({ computerId: o.id, spaceId: null, userId: null, kind: "fake" }),
     ]);
+  });
+
+  // Modified by Agental: computer time taken from credits, through the real start and idle check.
+  it("takes a credit organization's computer time from its credits, stops it at zero and refuses the next start", async () => {
+    vi.stubEnv("COMPUTER_USAGE_BILLING", "credits");
+    vi.stubEnv("COST_MARKUP", "2");
+    const o = await owner();
+    Object.assign(o.sandbox, { billsWhileRunning: () => true });
+    await creditAccount(system, o.id);
+    await system.modelCreditAccount.update({
+      where: { organizationId: o.id },
+      data: { mode: "credits" },
+    });
+    await reconcileCreditPurchase(system, o.id, { id: `${o.id}-paid`, amountCents: 50 });
+    const balance = async () => Number((await creditAccount(system, o.id)).balanceMicros) / 1e6;
+    /** Starts the computer as if an hour ago, so the idle check finds an hour to take. */
+    const runForAnHour = async () => {
+      await o.start();
+      const run = (await o.runs()).at(-1)!;
+      const hourAgo = new Date(Date.now() - 3_600_000);
+      await system.computer.update({ where: { id: o.id }, data: { runningSince: hourAgo } });
+      await system.computerRun.update({ where: { id: run.id }, data: { startedAt: hourAgo } });
+      await o.sleep();
+      return (await o.runs()).at(-1)!;
+    };
+
+    // The run carries the rate from its start: a computer that does not say its size, at the
+    // hourly rate for those. One hour really cost $0.20, so $0.40 of the $0.50 are taken.
+    const first = await runForAnHour();
+    expect(first).toMatchObject({ creditRateMicros: 200_000, endReason: "idle" });
+    expect(first.creditedThroughAt).toEqual(first.endedAt);
+    expect(await balance()).toBeCloseTo(0.1, 2);
+
+    // The next hour costs more than is left: it is taken, the computer is stopped for it, and
+    // the person is told why.
+    const second = await runForAnHour();
+    expect(second.endReason).toBe("allowance");
+    expect(await balance()).toBeCloseTo(-0.3, 2);
+    expect((await system.computer.findUniqueOrThrow({ where: { id: o.id } })).state).toBe(
+      "suspended",
+    );
+    const refused = await o.start().catch((error: unknown) => error);
+    expect(refused).toBeInstanceOf(SandboxAllowanceUsedError);
+    expect((refused as Error).message).toBe(MODEL_CREDITS_EXHAUSTED_ERROR);
+  });
+
+  it("takes no credits for time after the provider stopped the computer", async () => {
+    vi.stubEnv("COMPUTER_USAGE_BILLING", "credits");
+    vi.stubEnv("COST_MARKUP", "2");
+    const o = await owner();
+    Object.assign(o.sandbox, { billsWhileRunning: () => true });
+    await creditAccount(system, o.id);
+    await system.modelCreditAccount.update({
+      where: { organizationId: o.id },
+      data: { mode: "credits" },
+    });
+    await reconcileCreditPurchase(system, o.id, { id: `${o.id}-paid`, amountCents: 500 });
+    await o.start();
+    // Started four hours ago and last seen running three hours ago: one hour was really used.
+    const lastSeenAt = new Date(Date.now() - 3 * 3_600_000);
+    const startedAt = new Date(lastSeenAt.getTime() - 3_600_000);
+    await system.computer.update({ where: { id: o.id }, data: { runningSince: startedAt } });
+    await system.computerRun.updateMany({
+      where: { computerId: o.id },
+      data: { startedAt, lastSeenAt },
+    });
+    o.sandbox.isRunning = async () => false;
+    o.sandbox.exportWorkspace = async function* () {
+      yield* [];
+      throw Object.assign(new Error("sandbox removed"), { name: "SandboxNotFoundError" });
+    };
+
+    await o.sleep();
+
+    const [run] = await o.runs();
+    expect(run).toMatchObject({ endReason: "gone", endedAt: lastSeenAt });
+    expect(run!.creditedThroughAt).toEqual(lastSeenAt);
+    // One hour at $0.20, twice over: $0.40 of the $5.00, not the four hours since the start.
+    expect(Number((await creditAccount(system, o.id)).balanceMicros) / 1e6).toBeCloseTo(4.6, 2);
   });
 
   it("does not record host computers, whose stop only Electron sees", async () => {

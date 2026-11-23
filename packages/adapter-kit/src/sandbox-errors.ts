@@ -31,11 +31,14 @@ export class SandboxRequestRejectedError extends Error {
   }
 }
 
-/** The organization spent this month's computer allowance, so no computer that bills starts. */
+/**
+ * The organization spent this month's computer allowance, so no computer that bills starts.
+ * Modified by Agental: where computer time is taken from credits, `message` says they ran out.
+ */
 export class SandboxAllowanceUsedError extends Error {
   readonly code = "SANDBOX_ALLOWANCE_USED";
-  constructor() {
-    super(COMPUTER_ALLOWANCE_USED_ERROR);
+  constructor(message: string = COMPUTER_ALLOWANCE_USED_ERROR) {
+    super(message);
     this.name = "SandboxAllowanceUsedError";
   }
 }

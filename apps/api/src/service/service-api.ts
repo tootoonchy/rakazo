@@ -14,6 +14,7 @@ import { CreateRoutineInput, creditAlertLevel, McpServerConfigInput } from "@rak
 import { hasValidBearerToken } from "@rakazo/core/node/secrets-guard";
 import type { Prisma, PrismaClient } from "@rakazo/db";
 import {
+  COMPUTER_USAGE_PROVIDER,
   createOrganizationWithDefaultSpace,
   creditsUsedSinceAdded,
   dailyCreditCapMicros,
@@ -425,7 +426,9 @@ async function writeMemory(deps: ServiceApiDeps, input: z.infer<typeof MemoryInp
  * Per provisioned project, for one calendar month (UTC): what the model calls really cost, what
  * was taken from credits for them, and what was paid in. Read from the settled credit entries,
  * joined to the usage each one paid for, so a guest's usage counts for the organization that
- * paid. Usage whose recorded cost is already a customer price is left out.
+ * paid. Computer time taken from credits is reported beside it, its real cost read from each
+ * entry's own receipt. Paid services record a customer price, not a cost, so only what was taken
+ * for them is reported.
  */
 async function usageReport(prisma: PrismaClient, month: string) {
   const from = new Date(`${month}-01T00:00:00.000Z`);
@@ -436,6 +439,9 @@ async function usageReport(prisma: PrismaClient, month: string) {
       name: string;
       cost: number | null;
       charged: number | null;
+      computerCost: number | null;
+      computerCharged: number | null;
+      servicesCharged: number | null;
       paid: number | null;
     }[]
   >`
@@ -446,6 +452,15 @@ async function usageReport(prisma: PrismaClient, month: string) {
       (SELECT -SUM(e."amountMicros") / 1e6 FROM model_credit_entries e JOIN usage_records u ON u."callId" = e."callId"
         WHERE e."organizationId" = o.id AND e.pending = false AND u.provider <> 'services'
           AND e."createdAt" >= ${from} AND e."createdAt" < ${to})::float8 AS charged,
+      (SELECT SUM((e.usage->>'costUsd')::float8) FROM model_credit_entries e
+        WHERE e."organizationId" = o.id AND e.pending = false AND e.provider = ${COMPUTER_USAGE_PROVIDER}
+          AND e."createdAt" >= ${from} AND e."createdAt" < ${to})::float8 AS "computerCost",
+      (SELECT -SUM(e."amountMicros") / 1e6 FROM model_credit_entries e
+        WHERE e."organizationId" = o.id AND e.pending = false AND e.provider = ${COMPUTER_USAGE_PROVIDER}
+          AND e."createdAt" >= ${from} AND e."createdAt" < ${to})::float8 AS "computerCharged",
+      (SELECT -SUM(e."amountMicros") / 1e6 FROM model_credit_entries e
+        WHERE e."organizationId" = o.id AND e.pending = false AND e.provider = 'services'
+          AND e."createdAt" >= ${from} AND e."createdAt" < ${to})::float8 AS "servicesCharged",
       (SELECT SUM(e."amountMicros") / 1e6 FROM model_credit_entries e
         WHERE e."organizationId" = o.id AND e.source LIKE 'purchase:%'
           AND e."createdAt" >= ${from} AND e."createdAt" < ${to})::float8 AS paid
@@ -457,6 +472,9 @@ async function usageReport(prisma: PrismaClient, month: string) {
       name: row.name,
       cost_usd: row.cost ?? 0,
       charged_usd: row.charged ?? 0,
+      computer_cost_usd: row.computerCost ?? 0,
+      computer_charged_usd: row.computerCharged ?? 0,
+      services_charged_usd: row.servicesCharged ?? 0,
       credits_granted_usd: row.paid ?? 0,
     })),
   };

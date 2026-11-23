@@ -11,6 +11,7 @@ three things more. This page says which are built, how they are set, and what is
 | `COST_MARKUP`                | Credits taken per dollar of real cost, on the deployment's own key. `2` takes two dollars of credits for each dollar the provider reports. Applied when credits are held before a call and when the call is settled, so a hold always covers the charge. | `1`: at cost, as upstream  |
 | `MONTHLY_PLATFORM_FEE_CENTS` | The part of each monthly plan payment that is the deployment's fee, not credits. `5000` turns a $200 monthly payment into $150 of credits. A one-time top-up carries no fee.                                                                             | `0`: every cent is credits |
 | `DAILY_CREDIT_CAP_CENTS`     | The most credits one organization's work may take in a UTC day, whatever its balance. `2000` stops new work after $20 of credits in a day. Open holds count, so work in flight cannot overshoot it.                                                      | No daily cap, as upstream  |
+| `COMPUTER_USAGE_BILLING`     | What pays for computer time. `credits` takes the time of organizations that run on credits from those credits, at the real hourly cost times `COST_MARKUP`. Organizations on their own key keep their plan's allowance. | `allowance`: every plan includes computer time, as upstream |
 
 - **A client can have its own daily cap.** `POST /api/v1/service/credits` with `daily_cap_cents`
   sets it for one Space's organization; `null` returns it to `DAILY_CREDIT_CAP_CENTS`. The change
@@ -51,7 +52,23 @@ three things more. This page says which are built, how they are set, and what is
 - **A person's own key is never charged credits.** Calls on a key the person connected are not
   metered against credits at all (upstream behavior).
 - **Report.** `GET /api/v1/service/usage?month=YYYY-MM` on the service API gives, per provisioned
-  project: real cost, credits taken, and credits granted from payments that month.
+  project: real cost, credits taken, and credits granted from payments that month. Computer time
+  is reported beside the model calls (`computer_cost_usd`, `computer_charged_usd`), and so is
+  what paid services took (`services_charged_usd`).
+- **Computer time from credits.** With `COMPUTER_USAGE_BILLING=credits`, a run that starts for
+  an organization on credits carries its hourly rate (upstream's rates: $0.05, $0.10 or $0.20
+  an hour by size, $0.20 for a provider that does not report a size). Its time is taken at each
+  idle check and when it ends, each stretch once, through the same ledger as model calls: the
+  daily cap counts it and the audit journal records it. A computer in constant use is checked
+  when it reaches its running limit (two hours unless `COMPUTER_MAX_ACTIVE_MS` says otherwise),
+  so one charge can cover that long. With nothing left, or at the day's cap,
+  a computer does not start and a running one is saved and stopped. The stretch that used up
+  the last credits is still taken in full, so the balance can end below zero by that much. Time
+  that could not be taken at all is written to the journal as `computer_time_unpaid`. A computer
+  already running when the setting is turned on is charged from then on, not for before.
+- **Paid services follow the markup.** Services a bot pays for are charged at `COST_MARKUP`
+  when it is set, instead of their own fixed markup. Connector calls that cost nothing are not
+  charged.
 - **A bad value stops work.** A `COST_MARKUP` that is not a number from 1 to 10 raises an error
   instead of quietly charging at cost.
 
@@ -102,11 +119,10 @@ split for whoever reads the dashboard.
 - **Plan names and prices are code**, in `packages/contracts/src/billing/billing.ts`. Offering
   exactly the two plans above, with yearly at 10 times monthly for both, needs those constants
   and the plan screens changed, and a yearly credit plan added.
-- **Computer time is an allowance, not metered.** Each plan includes a fixed dollar amount of
-  computer time at fixed hourly rates; nothing is taken from credits and nothing is charged past
-  the allowance. Metering computer minutes at the markup is new work.
-- **Connector fees** are not metered. Paid services bots buy already carry their own fixed
-  markup.
+- **Computer rates are upstream's constants**, not what the computer provider really bills.
+  They are the cost that `COST_MARKUP` multiplies, so check them against the provider's invoice.
+- **Own-key computer time past the allowance** is refused, not charged: only organizations on
+  credits have their computer time taken from credits.
 - **No alerts.** Warnings at 50, 80 and 100 percent of a client's credits do not exist.
 - **Top-up prompt.** Running out of credits sends the person to model connections, not to a
   top-up screen.
