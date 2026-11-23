@@ -140,6 +140,8 @@ export const BillingStatusSchema = z.object({
    * Absent from older servers.
    */
   creditsUsedUsd: z.number().nonnegative().optional(),
+  /** When credits were last added: it names the stretch `creditsUsedUsd` counts. */
+  creditsAddedAt: z.string().nullable().optional(),
   monthlyAmountCents: z.number().int().positive().nullable().optional(),
   creditPurchasesEnabled: z.boolean().optional(),
   /** Monthly price of the own-key plan, as subscribed when the organization has it; `null` when free. */

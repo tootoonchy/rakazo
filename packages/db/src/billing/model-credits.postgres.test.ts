@@ -148,7 +148,10 @@ dbTests("model credits ledger", () => {
   });
   it("counts what work took since credits were last added, and starts over at the next addition", async () => {
     const operator = asSystem(prisma);
-    expect(await creditsUsedSinceAdded(operator, organizationId)).toBe(0n);
+    expect(await creditsUsedSinceAdded(operator, organizationId)).toEqual({
+      usedMicros: 0n,
+      addedAt: null,
+    });
     await reconcileCreditPurchase(prisma, organizationId, {
       id: `${organizationId}-first`,
       amountCents: 1000,
@@ -157,7 +160,8 @@ dbTests("model credits ledger", () => {
     await prisma.$transaction((tx) => settleModelCreditsTx(tx, call, 2));
     // An open hold counts in full, as it does against the balance.
     await reserveModelCredits(prisma, organizationId, 1);
-    expect(await creditsUsedSinceAdded(operator, organizationId)).toBe(3_000_000n);
+    const first = await creditsUsedSinceAdded(operator, organizationId);
+    expect(first.usedMicros).toBe(3_000_000n);
     // The addition must be later than the work, and both land within one clock tick here.
     await prisma.modelCreditEntry.updateMany({
       where: { organizationId, callId: { not: null } },
@@ -167,7 +171,10 @@ dbTests("model credits ledger", () => {
       id: `${organizationId}-second`,
       amountCents: 1000,
     });
-    expect(await creditsUsedSinceAdded(operator, organizationId)).toBe(0n);
+    const second = await creditsUsedSinceAdded(operator, organizationId);
+    expect(second.usedMicros).toBe(0n);
+    // The addition is what a reader tells one stretch of credits from the next by.
+    expect(second.addedAt?.getTime()).toBeGreaterThan(first.addedAt?.getTime() ?? Number.NaN);
   });
   it("holds disputed credits, returns them when the dispute is won, and never past a refund", async () => {
     const id = `${organizationId}-dispute`;

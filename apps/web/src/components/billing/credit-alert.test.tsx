@@ -41,11 +41,12 @@ afterEach(async () => {
   host.remove();
 });
 
-const credits = (leftUsd: number, usedUsd: number, owner = true) =>
+const credits = (leftUsd: number, usedUsd: number, owner = true, addedAt = "2027-01-01") =>
   ({
     funding: "credits",
     balanceUsd: leftUsd,
     creditsUsedUsd: usedUsd,
+    creditsAddedAt: addedAt,
     canManage: owner,
     creditPurchasesEnabled: true,
   }) as BillingStatus;
@@ -98,4 +99,25 @@ it("offers no purchase to a member who cannot buy credits", async () => {
   await vi.waitFor(() => expect(alert()?.textContent).toContain("80% of your credits are used."));
   expect(button("Add credits")).toBeUndefined();
   expect(button("Dismiss")).toBeDefined();
+});
+
+it("announces a level again after a refill the member was away for", async () => {
+  await show(credits(20, 80));
+  await vi.waitFor(() => expect(alert()?.textContent).toContain("80% of your credits are used."));
+  await act(async () => button("Dismiss")?.click());
+  await vi.waitFor(() => expect(alert()).toBeNull());
+
+  // The next visit finds credits added since, and already 80% of those used.
+  await act(async () => root.unmount());
+  root = createRoot(host);
+  await show(credits(20, 80, true, "2027-02-01"));
+  await vi.waitFor(() => expect(alert()?.textContent).toContain("80% of your credits are used."));
+});
+
+it("takes down a notice that a refill made untrue", async () => {
+  await show(credits(0, 100));
+  await vi.waitFor(() => expect(alert()?.textContent).toContain("Your credits are used up."));
+  // Credits were added in another window; the next status no longer has a level to report.
+  await show(credits(100, 0, true, "2027-02-01"));
+  await vi.waitFor(() => expect(alert()).toBeNull());
 });

@@ -416,7 +416,7 @@ async function creditsLeft(prisma: PrismaClient, spaceId: string) {
   });
   const daily = await dailyCreditCapStatus(prisma, space.organizationId, dailyCreditCapMicros());
   const balanceUsd = usd(account?.balanceMicros ?? 0n);
-  const usedUsd = usd(await creditsUsedSinceAdded(prisma, space.organizationId));
+  const usedUsd = usd((await creditsUsedSinceAdded(prisma, space.organizationId)).usedMicros);
   return {
     space_id: spaceId,
     has_account: Boolean(account),

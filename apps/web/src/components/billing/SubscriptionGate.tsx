@@ -1,5 +1,6 @@
 import { useLingui } from "@lingui/react/macro";
 import type { BillingStatus, Me } from "@rakazo/contracts";
+import { modelCreditsUsd } from "@rakazo/contracts";
 import { Dialog, DialogContent } from "@rakazo/ui-web";
 import type { ReactNode } from "react";
 import { createContext, Suspense, useContext, useEffect, useRef, useState } from "react";
@@ -12,6 +13,7 @@ import type { SupportChat } from "../../lib/platform/support-chat";
 import { useSupportChat } from "../../lib/platform/support-chat";
 import type { RpcClient } from "../../lib/query/rpc";
 import { createSpaceRpc, rpc, SPACE_SELECTED_EVENT, selectedSpaceId } from "../../lib/query/rpc";
+import { RUNS_CHANGED_EVENT } from "../../lib/query/space-changes";
 import { useEventListener } from "../../lib/use-event-listener";
 
 const PaywallPage = lazyComponent(() =>
@@ -135,6 +137,13 @@ export function SubscriptionGate({
   };
   useEventListener(billed ? window : null, "focus", () => recheck());
   useEventListener(billed ? document : null, "visibilitychange", () => recheck());
+  // Modified by Agental: a run takes credits, so the server's signal that runs changed is when
+  // the balance and its alerts are read again. Only an organization on credits needs it.
+  const onCredits =
+    state.kind !== "loading" && state.status ? modelCreditsUsd(state.status) !== null : false;
+  useEventListener<EventTarget, string>(onCredits ? window : null, RUNS_CHANGED_EVENT, () =>
+    recheck(),
+  );
   // Another Space can belong to another organization with its own invite link and plan: the
   // previous one's link is dropped at once, and billing reloads for the new one.
   // If the new Space's read fails, nothing of the previous one stays: the app opens without a

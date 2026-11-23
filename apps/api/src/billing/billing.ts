@@ -758,7 +758,8 @@ export function createBillingService(deps: {
                 ? "credits"
                 : null,
           balanceUsd: Number(credits.balanceMicros) / MICROS_PER_DOLLAR,
-          creditsUsedUsd: Number(creditsUsed) / MICROS_PER_DOLLAR,
+          creditsUsedUsd: Number(creditsUsed.usedMicros) / MICROS_PER_DOLLAR,
+          creditsAddedAt: creditsUsed.addedAt?.toISOString() ?? null,
           monthlyAmountCents: account?.creditAmountCents ?? null,
           creditPurchasesEnabled: deps.managedModelsAvailable ?? true,
           byokPriceCents:
