@@ -4,9 +4,9 @@ import type { CreditAlertLevel } from "@rakazo/contracts";
 import { creditAlertLevel, modelCreditsUsd } from "@rakazo/contracts";
 import { Button, toast } from "@rakazo/ui-web";
 import { useEffect, useRef } from "react";
-import { useBilling } from "./SubscriptionGate";
+import { CREDIT_ALERT_TOAST_ID, useBilling } from "./SubscriptionGate";
 
-const TOAST_ID = "credit-alert";
+const TOAST_ID = CREDIT_ALERT_TOAST_ID;
 /**
  * What was last seen per Space: a mark of the refill it belonged to and the level reached, so a
  * level is announced once per refill, also for someone who was away while credits were added.
@@ -105,14 +105,6 @@ export function useCreditAlert(onAddCredits: () => void) {
       },
     );
   }, [status, spaceId, level, refill, canAdd]);
-  // When the app gives way to the paywall (nothing left and no plan), that screen is the notice:
-  // an earlier one must not stay on top of it.
-  useEffect(
-    () => () => {
-      if (open.current !== null) toast.dismiss(TOAST_ID);
-    },
-    [],
-  );
 }
 
 function CreditAlert({
