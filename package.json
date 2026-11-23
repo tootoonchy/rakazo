@@ -20,6 +20,7 @@
     "db:generate": "pnpm --filter @rakazo/db generate",
     "db:migrate": "pnpm --filter @rakazo/api db:migrate",
     "sandbox:build": "docker build -t rakazo/computer:local infra/sandboxes/computer",
+    "billing:plans": "tsx packages/adapters/src/providers/billing/stripe/sync-stripe-plans.ts",
     "sandbox:boat-snapshot": "tsx packages/adapters/src/providers/computer/boat/build-boat-snapshot.ts",
     "sandbox:boxd-snapshot": "tsx packages/adapters/src/providers/computer/boxd/build-boxd-snapshot.ts",
     "sandbox:novita-template": "tsx packages/adapters/src/providers/computer/novita/build-novita-template.ts",
