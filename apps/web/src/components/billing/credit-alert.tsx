@@ -9,12 +9,25 @@ import { useBilling } from "./SubscriptionGate";
 
 const TOAST_ID = "credit-alert";
 /**
- * What was last seen per Space: the refill it belonged to and the level reached, so a level is
- * announced once per refill, also for someone who was away while credits were added.
+ * What was last seen per Space: a mark of the refill it belonged to and the level reached, so a
+ * level is announced once per refill, also for someone who was away while credits were added.
  */
 export const CREDIT_ALERT_KEY = "rakazo.creditAlert";
 
 type Seen = { refill: string; level: number };
+
+/**
+ * A short fingerprint of when credits were last added. It is all the browser keeps to tell one
+ * refill from the next: billing data itself is not written to its storage.
+ */
+function refillMark(addedAt: string): string {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < addedAt.length; index++) {
+    hash ^= addedAt.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(36);
+}
 
 // Storage that cannot be read or written still announces each level once per page load.
 const seenThisSession = new Map<string, Seen>();
@@ -48,7 +61,7 @@ export function resetCreditAlertSessionForTests() {
 export function useCreditAlert(onAddCredits: () => void) {
   const { status } = useBilling();
   const level = creditAlertLevel(modelCreditsUsd(status), status?.creditsUsedUsd ?? 0) ?? 0;
-  const refill = status?.creditsAddedAt ?? "";
+  const refill = refillMark(status?.creditsAddedAt ?? "");
   const canAdd = Boolean(status?.canManage && status.creditPurchasesEnabled);
   const addCredits = useRef(onAddCredits);
   addCredits.current = onAddCredits;
