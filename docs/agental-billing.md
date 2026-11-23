@@ -16,6 +16,18 @@ three things more. This page says which are built, how they are set, and what is
   sets it for one Space's organization; `null` returns it to `DAILY_CREDIT_CAP_CENTS`. The change
   is written to the billing audit journal. `GET` on the same path shows the cap in force and what
   the day has taken so far.
+- **Cheap models by default, premium by opt-in.** `PREMIUM_MODEL_OUTPUT_USD` is a price in
+  dollars per million output tokens. A model the deployment pays for at or above it is premium,
+  and credits run it only for an organization the operator has turned premium models on for:
+  `POST /api/v1/service/credits` with `premium_models: true` (journaled, like the daily cap).
+  Unset, no model is premium, as upstream. The price is the model registry's, or the tariff in
+  `MODEL_CREDIT_OFFERINGS` when the deployment lists its offerings. It is checked when a bot's
+  model is chosen and again before each call, where the person sees "This model is not included
+  in your plan. Choose another model." A model run on a person's own key or subscription is
+  never limited. The model everyone starts on is the deployment's default, chosen by
+  `PI_DEFAULT_PROVIDER` and `PI_DEFAULT_MODEL` (or `defaultOfferingId` in
+  `MODEL_CREDIT_OFFERINGS`): keep it below the threshold. The server warns at startup when it is
+  not, and refuses to start on a threshold that is not a number above 0.
 - **Real cost stays recorded.** `usage_records.costUsd` is still what the provider charged (for
   the hosted model provider, the cost it reports per generation). What was taken is in
   `model_credit_entries`. The two can be compared per organization.
@@ -85,8 +97,6 @@ split for whoever reads the dashboard.
 - **No alerts.** Warnings at 50, 80 and 100 percent of a client's credits do not exist.
 - **Top-up prompt.** Running out of credits sends the person to model connections, not to a
   top-up screen.
-- **Cheap models by default, premium by opt-in.** The deployment's default model is a setting,
-  but there is no per-plan restriction on which models a client may pick.
 - **Copy.** The plan screens still say credits go to model usage at provider cost, which is not
   true once a markup or a fee is set. That copy must change before either is switched on for
   customers.

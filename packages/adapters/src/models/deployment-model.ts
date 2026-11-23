@@ -2,9 +2,14 @@ import { getEnvApiKey } from "@earendil-works/pi-ai/compat";
 import type { ModelUsageLookup, SecretStore } from "@rakazo/adapter-kit";
 import { canonicalPiProviderId } from "@rakazo/contracts";
 import { modelCreditOfferings } from "../model-credits/offerings.js";
+import { isPremiumModelPrice } from "../model-credits/premium-models.js";
 import { LOCAL_PROVIDER_ID, localModelIds } from "../runtime/pi/models/pi-local-provider-id.js";
 import type { PiCatalogEntry } from "../runtime/pi/models/pi-models.js";
-import { hiddenCatalogModel, listPiCatalog } from "../runtime/pi/models/pi-models.js";
+import {
+  creditsOutputPriceUsd,
+  hiddenCatalogModel,
+  listPiCatalog,
+} from "../runtime/pi/models/pi-models.js";
 
 import { modelProviderDefinition, modelProviders } from "./model-provider-registry.js";
 import { parseModelSecret } from "./model-secret.js";
@@ -66,6 +71,18 @@ export function resolveDeploymentModel(env: NodeJS.ProcessEnv = process.env) {
     configured: Boolean(key) || hostCredentials,
     hostCredentials,
   };
+}
+
+/**
+ * Modified by Agental: what to tell the operator when the deployment's own default model is
+ * premium, or null. Credits would then refuse the default for every organization that has not
+ * been given premium models, which is every new one.
+ */
+export function premiumDefaultModelWarning(env: NodeJS.ProcessEnv = process.env): string | null {
+  const model = resolveDeploymentModel(env);
+  const price = creditsOutputPriceUsd({ provider: model.provider, id: model.model });
+  if (!model.configured || !isPremiumModelPrice(price, env)) return null;
+  return "The deployment's default model is premium under PREMIUM_MODEL_OUTPUT_USD, so credits refuse it for every organization without premium models. Choose a cheaper default model or raise the threshold.";
 }
 
 export function deploymentModelUsageLookup(): ModelUsageLookup | undefined {
