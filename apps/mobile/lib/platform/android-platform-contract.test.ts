@@ -103,7 +103,8 @@ describe("Android mobile platform contract", () => {
       "fun clearSession(context: Context) {\n      synchronized(sessionLock)",
     );
     expect(service).not.toContain("private fun postCompletion(");
-    expect(service).toContain('"rakazo://group-thread?groupId=');
+    // Modified by Agental: the link's scheme is the app's own, read from the build.
+    expect(service).toContain('"${LinkScheme.of(this)}://group-thread?groupId=');
     expect(service).toMatch(/&spaceId=\$\{Uri\.encode\(run\.spaceId\)\}/);
     expect(service).toContain('putString("rakazo.spaceId", run.spaceId)');
     expect(service).toMatch(/&threadId=\$\{Uri\.encode\(run\.threadId\)\}/);

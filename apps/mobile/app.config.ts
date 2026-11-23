@@ -38,9 +38,10 @@ export default ({ config, projectRoot }: ConfigContext): ExpoConfig => {
   let result = brandMobileConfig(config as ExpoConfig, project);
   if (BRAND.name !== UPSTREAM_NAME) {
     result = brandArtwork(result, projectRoot, `./assets/brand/${BRAND.appIds.scheme}`);
+    // Native links (notifications, the bots-at-work card, shortcuts) use the app's first scheme.
+    // Upstream's own build needs no plugin: native code falls back to upstream's scheme.
+    result = { ...result, plugins: [...(result.plugins ?? []), "./plugins/with-link-scheme"] };
   }
-  // Native links (notifications, the bots-at-work card, shortcuts) use the app's first scheme.
-  result = { ...result, plugins: [...(result.plugins ?? []), "./plugins/with-link-scheme"] };
   const rpId = passkeyRpId(process.env.EXPO_PUBLIC_API_URL);
   if (rpId) {
     // Native passkeys only work for domains the binary is associated with, so the app reads the
