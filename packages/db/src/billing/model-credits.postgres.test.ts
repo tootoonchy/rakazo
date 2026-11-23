@@ -1,6 +1,6 @@
 import { deferred } from "@rakazo/core/test-async";
 import { createLogger, createTestSink, installLogger } from "@rakazo/logging";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PrismaClient } from "../database/client.js";
 import { createDb } from "../database/client.js";
 import { JsonColumnMismatchError } from "../database/json-column.js";
@@ -66,6 +66,27 @@ dbTests("model credits ledger", () => {
     await reconcileCreditPurchase(prisma, organizationId, { id, amountCents: 500 });
     await reconcileCreditPurchase(prisma, organizationId, { id, amountCents: 2000 });
     expect(await balance()).toBe(5_000_000n);
+  });
+  // Modified by Agental: the deployment's markup, and the fail-closed rule it must not weaken.
+  it("takes twice the real cost at a 2x markup, and refuses new work once the balance cannot cover it", async () => {
+    vi.stubEnv("COST_MARKUP", "2");
+    await reconcileCreditPurchase(prisma, organizationId, {
+      id: `${organizationId}-markup`,
+      amountCents: 1000,
+    });
+    // A call that may cost up to $3 holds $6 of credits; it really cost $2, so $4 is taken.
+    const reservation = await reserveModelCredits(prisma, organizationId, 3);
+    expect(await balance()).toBe(4_000_000n);
+    await prisma.$transaction((tx) => settleModelCreditsTx(tx, reservation, 2));
+    expect(await balance()).toBe(6_000_000n);
+    // $6 of credits covers $3 of real cost and not a cent more.
+    await expect(reserveModelCredits(prisma, organizationId, 3.01)).rejects.toThrow("credits");
+    const last = await reserveModelCredits(prisma, organizationId, 3);
+    await prisma.$transaction((tx) => settleModelCreditsTx(tx, last, 3));
+    expect(await balance()).toBe(0n);
+    // At zero nothing more starts, however small.
+    await expect(reserveModelCredits(prisma, organizationId, 0.01)).rejects.toThrow("credits");
+    expect(await balance()).toBe(0n);
   });
   it("holds disputed credits, returns them when the dispute is won, and never past a refund", async () => {
     const id = `${organizationId}-dispute`;

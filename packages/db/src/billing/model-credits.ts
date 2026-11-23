@@ -5,6 +5,7 @@ import { MODEL_CREDITS_EXHAUSTED_ERROR, MODEL_UNPRICED_FOR_CREDITS_ERROR } from 
 import type { PrismaClient } from "../database/client.js";
 import { isUniqueViolation } from "../database/prisma-errors.js";
 import type { Prisma } from "../generated/prisma/client.js";
+import { chargedMicros, creditsGrantedCents } from "./cost-markup.js";
 import { enforceModelCreditCap } from "./model-credit-cap.js";
 import {
   allocateCreditLots,
@@ -102,7 +103,8 @@ export async function reconcileCreditPurchase(
     if (read !== undefined && existing && read < existing.purchaseRead) return 0;
     // Only what a dispute holds can come back; a refund or a lost dispute lowers the ceiling for good.
     const ceiling = existing ? existing.amountMicros + existing.disputedMicros : undefined;
-    const paid = BigInt(purchase.amountCents) * 10_000n;
+    // Modified by Agental: a monthly plan payment grants what is left after the platform fee.
+    const paid = BigInt(creditsGrantedCents(purchase)) * 10_000n;
     const kept = ceiling !== undefined && ceiling < paid ? ceiling : paid;
     const held = BigInt(disputedCents) * 10_000n;
     const amountMicros = held < kept ? kept - held : 0n;
@@ -201,7 +203,8 @@ export async function reserveModelCredits(
 ) {
   if (!Number.isFinite(maxCostUsd) || maxCostUsd <= 0 || maxCostUsd > 10_000)
     throw new Error(MODEL_UNPRICED_FOR_CREDITS_ERROR);
-  const amountMicros = BigInt(Math.ceil(maxCostUsd * MICROS_PER_DOLLAR));
+  // Modified by Agental: credits are held at the deployment's markup over real cost.
+  const amountMicros = chargedMicros(maxCostUsd, attribution?.provider);
   const callId = attribution?.callId ?? randomUUID();
   const source = `call:${callId}`;
   return prisma.$transaction(async (tx) => {
@@ -275,7 +278,8 @@ export async function settleModelCreditsTx(
   await expireCreditLots(tx, scope.organizationId, now);
   const entry = await tx.modelCreditEntry.findUnique({ where: { id: reservationId } });
   if (!entry || (!entry.pending && !reconcile)) return;
-  const amountMicros = -BigInt(Math.ceil(costUsd * MICROS_PER_DOLLAR));
+  // Modified by Agental: settled at the same markup the hold was taken at.
+  const amountMicros = -chargedMicros(costUsd, entry.provider);
   if (!entry.pending && amountMicros === entry.amountMicros) return;
   let allocations = storedCreditAllocations(entry);
   const difference = amountMicros - entry.amountMicros;

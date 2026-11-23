@@ -1,10 +1,10 @@
 import type { AgentUsage, ModelUsageLookup } from "@rakazo/adapter-kit";
 import type { PrismaClient } from "@rakazo/db";
 import {
+  coveredCostUsd,
   expireModelCredits,
   hasFinalModelCost,
   JsonColumnMismatchError,
-  MICROS_PER_DOLLAR,
   Prisma,
   RECONCILED_ESTIMATE_COST_SOURCE,
   readJsonColumn,
@@ -168,7 +168,8 @@ function fallbackUsage(
     return null;
   const costUsd = Math.min(
     knownCost ?? tokenCost / 1_000_000,
-    Math.max(0, Number(heldMicros)) / MICROS_PER_DOLLAR,
+    // Modified by Agental: the hold was taken at the markup, so it covers that much less cost.
+    coveredCostUsd(heldMicros),
   );
   return {
     inputTokens: null,
