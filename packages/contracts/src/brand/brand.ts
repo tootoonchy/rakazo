@@ -70,15 +70,20 @@ const AGENTAL: Brand = {
   source: UPSTREAM.source,
 };
 
+/** Set by the web build (`define` in apps/web/vite.config.ts); absent everywhere else. */
+declare const __RAKAZO_BRAND__: string | undefined;
+
 /**
- * `RAKAZO_BRAND=upstream` keeps the upstream identity. The repository's own test suite runs that
- * way (see vitest.config.ts), so tests written upstream keep passing after every sync; builds and
- * deployments of this branch leave it unset and get the white-label.
+ * `RAKAZO_BRAND=upstream` keeps the upstream identity. The repository's own unit and end-to-end
+ * suites run that way (vitest.config.ts and the testkit harness), so tests written upstream keep
+ * passing after every sync; builds and deployments of this branch leave it unset and get the
+ * white-label. Servers read the variable when they start; the web app has it built in.
  */
 function selectedBrand(): Brand {
+  const built = typeof __RAKAZO_BRAND__ === "string" ? __RAKAZO_BRAND__ : "";
   const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
     ?.env;
-  return env?.RAKAZO_BRAND === "upstream" ? UPSTREAM : AGENTAL;
+  return (built || env?.RAKAZO_BRAND) === "upstream" ? UPSTREAM : AGENTAL;
 }
 
 export const BRAND: Brand = selectedBrand();
