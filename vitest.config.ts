@@ -98,6 +98,9 @@ export default defineConfig({
     // react-native can be mocked in node tests.
     server: { deps: { inline: [/react-native-markdown-display/] } },
     environment: "node",
+    // Modified by Agental: the suite is written upstream and names the upstream product, so it
+    // runs with the upstream identity. The white-label has its own tests (brand.test.ts).
+    env: { RAKAZO_BRAND: "upstream" },
     setupFiles: ["./packages/testkit/src/pin-test-env.ts"],
     restoreMocks: true,
     unstubEnvs: true,

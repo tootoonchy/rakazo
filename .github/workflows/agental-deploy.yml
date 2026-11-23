@@ -1,0 +1,62 @@
+name: agental-deploy
+
+# Modified by Agental: new file in the Agental white-label of Rakazo (Apache-2.0, see NOTICE).
+#
+# Deploys the white-label branch to Railway.
+#   staging     every push to agental-whitelabel (a merged pull request) deploys by itself
+#   production  only when someone starts this workflow by hand and picks "production", and then
+#               only after a reviewer approves the run: the `production` environment in this
+#               repository's settings must have required reviewers, which is what makes that
+#               approval mandatory. Nothing reaches production from a push.
+#
+# Each GitHub environment holds its own RAILWAY_TOKEN secret: a Railway project token scoped to
+# that Railway environment, so the staging job cannot touch production even by mistake.
+# RAILWAY_SERVICES (an environment variable in the same place) lists the Railway services to
+# deploy, as a JSON list; see docs/agental-deploy.md. With no token set the job does nothing.
+on:
+  push:
+    branches: [agental-whitelabel]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Where to deploy
+        required: true
+        type: choice
+        default: staging
+        options: [staging, production]
+
+permissions: {}
+
+jobs:
+  deploy:
+    name: Deploy to ${{ github.event.inputs.target || 'staging' }}
+    # Production is never built from anything but the white-label branch.
+    if: github.ref == 'refs/heads/agental-whitelabel'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: ${{ github.event.inputs.target || 'staging' }}
+    concurrency:
+      group: agental-deploy-${{ github.event.inputs.target || 'staging' }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJSON(vars.RAILWAY_SERVICES || '["app"]') }}
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      SERVICE: ${{ matrix.service }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        if: env.RAILWAY_TOKEN != ''
+        with:
+          persist-credentials: false
+      - name: Deploy
+        if: env.RAILWAY_TOKEN != ''
+        # The token names the Railway project and environment; --ci streams the build and fails
+        # the job when the build or the health check fails.
+        run: npx --yes @railway/cli@5.75.0 up --ci --service "$SERVICE"
+      - name: Skipped
+        if: env.RAILWAY_TOKEN == ''
+        run: echo "RAILWAY_TOKEN is not set for this environment, so nothing was deployed."

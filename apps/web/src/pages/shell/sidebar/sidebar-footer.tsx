@@ -1,6 +1,7 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import type { NavLink } from "@rakazo/contracts";
 import { ANDROID_APP_STORE_URL, IOS_APP_STORE_URL } from "@rakazo/contracts";
+import { BRAND } from "@rakazo/contracts/brand";
 import {
   AppMarkStack,
   Button,
@@ -31,6 +32,7 @@ import {
 import { useLayoutEffect, useRef, useState } from "react";
 import { useSidebarUpdate } from "../../../components/DesktopUpdates";
 import { IconTooltip } from "../../../components/IconTooltip";
+import { OpenSourceLicenses } from "../../../components/legal/OpenSourceLicenses";
 import type { Organization } from "../../../lib/spaces/organizations";
 
 type Props = {
@@ -257,17 +259,20 @@ export function SidebarFooter({
               </Button>
             ))}
             <div className="my-1 border-t border-border" />
-            <a
-              className={`${buttonVariants({ variant: "ghost", size: "lg" })} w-full justify-start gap-2.5 font-normal`}
-              href={
-                /Android/i.test(navigator.userAgent) ? ANDROID_APP_STORE_URL : IOS_APP_STORE_URL
-              }
-              target="_blank"
-              rel="noreferrer"
-            >
-              <Smartphone className="text-muted-foreground" strokeWidth={1.75} />
-              <Trans>Get the mobile app</Trans>
-            </a>
+            {/* Modified by Agental: upstream's store listings and self-host docs are upstream's own. */}
+            {BRAND.upstreamPromos ? (
+              <a
+                className={`${buttonVariants({ variant: "ghost", size: "lg" })} w-full justify-start gap-2.5 font-normal`}
+                href={
+                  /Android/i.test(navigator.userAgent) ? ANDROID_APP_STORE_URL : IOS_APP_STORE_URL
+                }
+                target="_blank"
+                rel="noreferrer"
+              >
+                <Smartphone className="text-muted-foreground" strokeWidth={1.75} />
+                <Trans>Get the mobile app</Trans>
+              </a>
+            ) : null}
             {onInvite ? (
               <Button
                 variant="ghost"
@@ -279,15 +284,19 @@ export function SidebarFooter({
                 <Trans>Invite friends</Trans>
               </Button>
             ) : null}
-            <a
-              className={`${buttonVariants({ variant: "ghost", size: "lg" })} w-full justify-start gap-2.5 font-normal`}
-              href="https://github.com/elie222/rakazo/blob/main/docs/self-host.md"
-              target="_blank"
-              rel="noreferrer"
-            >
-              <BookOpen className="text-muted-foreground" strokeWidth={1.75} />
-              <Trans>Docs</Trans>
-            </a>
+            {BRAND.upstreamPromos ? (
+              <a
+                className={`${buttonVariants({ variant: "ghost", size: "lg" })} w-full justify-start gap-2.5 font-normal`}
+                href="https://github.com/elie222/rakazo/blob/main/docs/self-host.md"
+                target="_blank"
+                rel="noreferrer"
+              >
+                <BookOpen className="text-muted-foreground" strokeWidth={1.75} />
+                <Trans>Docs</Trans>
+              </a>
+            ) : (
+              <OpenSourceLicenses />
+            )}
             <div className="my-1 border-t border-border" />
             <Button
               variant="ghost"

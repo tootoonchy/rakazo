@@ -1,5 +1,6 @@
 import { Trans, useLingui } from "@lingui/react/macro";
 import { BOT_COLOR_LIST, signInProviders } from "@rakazo/contracts";
+import { BRAND } from "@rakazo/contracts/brand";
 import {
   credentialIssue,
   MAX_PASSWORD_LENGTH,
@@ -8,6 +9,7 @@ import {
   suggestEmailCorrection,
 } from "@rakazo/core";
 import {
+  BrandMark,
   Button,
   Input,
   InputOTP,
@@ -703,11 +705,16 @@ export function AuthFrame({
         >
           {leading ? <div className="mb-4 self-start">{leading}</div> : null}
           <div className={surface ? "flex w-full flex-col items-center" : "contents"}>
-            <LogoAvatar
-              size={74}
-              avatarValue={BOT_COLOR_LIST.find((color) => color.id === "orange")?.hex}
-              motion={false}
-            />
+            {/* Modified by Agental: a brand with its own look shows its own mark here. */}
+            {BRAND.themed ? (
+              <BrandMark name={BRAND.name} />
+            ) : (
+              <LogoAvatar
+                size={74}
+                avatarValue={BOT_COLOR_LIST.find((color) => color.id === "orange")?.hex}
+                motion={false}
+              />
+            )}
             <h1
               aria-live="polite"
               className={

@@ -6,6 +6,7 @@ import type {
   TransactionalEmailProvider,
 } from "@rakazo/adapter-kit";
 import { LAST_SIGN_IN_COOKIE, PartnerClickId, SignupAttribution } from "@rakazo/contracts";
+import { BRAND } from "@rakazo/contracts/brand";
 import {
   displayName,
   emailAllowed,
@@ -258,7 +259,8 @@ export function createAuth(prisma: PrismaClient, env: AuthEnv) {
     returned: false,
   } as const;
   const auth = betterAuth({
-    appName: "Rakazo",
+    // Modified by Agental: the name people see in sign-in prompts comes from the brand.
+    appName: BRAND.name,
     logger: env.logger,
     secret: env.secret,
     baseURL: env.baseURL,

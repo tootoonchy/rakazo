@@ -13,3 +13,9 @@ interface ImportMeta {
 declare module "*.po" {
   export const messages: Record<string, unknown>;
 }
+
+// Modified by Agental: the repository's NOTICE file (see `openSourceNotice` in server/brand-page.ts).
+declare module "virtual:open-source-notice" {
+  const notice: string;
+  export default notice;
+}

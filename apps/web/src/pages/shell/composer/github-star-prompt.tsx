@@ -1,4 +1,5 @@
 import { Trans, useLingui } from "@lingui/react/macro";
+import { BRAND } from "@rakazo/contracts/brand";
 import { Button, buttonVariants, toast } from "@rakazo/ui-web";
 import { Star } from "lucide-react";
 
@@ -19,6 +20,8 @@ function dismiss() {
 
 /** Counts a sent message and, after five, asks once for a GitHub star until dismissed. */
 export function recordMessageSent(): void {
+  // Modified by Agental: a white-label does not ask its customers to star the upstream project.
+  if (!BRAND.upstreamPromos) return;
   if (shownThisSession) return;
   try {
     if (localStorage.getItem(STAR_PROMPT_DISMISSED_KEY) !== null) return;

@@ -1,4 +1,5 @@
 import { fileURLToPath } from "node:url";
+import { BRAND } from "@rakazo/contracts/brand";
 import { isBuildId } from "@rakazo/contracts/client-build";
 import { webDarkTokens } from "@rakazo/ui-tokens";
 import type { Plugin, Rolldown } from "vite";
@@ -11,15 +12,16 @@ const CACHE_PLACEHOLDER = "__RAKAZO_SW_CACHE__";
 
 export function webManifest() {
   const icons = [192, 512].map((size) => ({
-    src: `/icon-${size}.png`,
+    src: `${BRAND.iconPath}/icon-${size}.png`,
     sizes: `${size}x${size}`,
     type: "image/png",
   }));
   return {
     id: "/",
-    name: "Rakazo",
-    short_name: "Rakazo",
-    description: "Your team of always-on agents.",
+    // Modified by Agental: the install name and description come from the brand.
+    name: BRAND.name,
+    short_name: BRAND.name,
+    description: BRAND.description,
     start_url: "/",
     scope: "/",
     display: "standalone",

@@ -10,6 +10,12 @@
       "development": "./src/index.ts",
       "default": "./src/index.ts"
     },
+    "./brand": {
+      "types": "./src/brand/brand.ts",
+      "development": "./src/brand/brand.ts",
+      "default": "./src/brand/brand.ts"
+    },
+    "./brand-theme": "./src/brand/theme/theme.json",
     "./local-settings": "./src/clients/local-settings.js",
     "./client-build": {
       "types": "./src/clients/client-build.ts",
