@@ -26,11 +26,18 @@ struct WorkActivityAttributes: ActivityAttributes {
   }
 }
 
+/// Modified by Agental: the scheme the app's own links use. The build writes it into Info.plist
+/// (plugins/with-link-scheme.js), for the app and for the widget extension, which reads its own.
+enum AppLink {
+  static let scheme =
+    (Bundle.main.object(forInfoDictionaryKey: "RakazoLinkScheme") as? String) ?? "rakazo"
+}
+
 extension WorkActivityAttributes.ContentState.Row {
   /// Opens this bot's chat.
   var link: URL? {
     var parts = URLComponents()
-    parts.scheme = "rakazo"
+    parts.scheme = AppLink.scheme
     parts.host = groupId == nil ? "thread" : "group-thread"
     parts.queryItems = [
       groupId.map { URLQueryItem(name: "groupId", value: $0) }

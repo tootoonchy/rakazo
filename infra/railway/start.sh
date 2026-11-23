@@ -16,8 +16,13 @@ if [[ "${1:-}" != serve ]]; then
   exec env -u DATABASE_MIGRATION_URL bash "$0" serve
 fi
 
-export RAILWAY_ENVIRONMENT_ID
-RAILWAY_ENVIRONMENT_ID=$(node infra/railway/sandbox-environment.mjs)
+# Modified by Agental: the separate sandbox environment, and the Railway API token that makes
+# it, are needed only when computers run on Railway. With another provider the service starts
+# without either.
+if [[ "${SANDBOX_PROVIDER:-}" == railway ]]; then
+  export RAILWAY_ENVIRONMENT_ID
+  RAILWAY_ENVIRONMENT_ID=$(node infra/railway/sandbox-environment.mjs)
+fi
 pnpm --filter @rakazo/api exec node dist/cli/bootstrap-owner.js
 unset OWNER_PASSWORD
 # Personal template: registration is operator configuration, never an app-account permission.

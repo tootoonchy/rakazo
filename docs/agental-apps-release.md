@@ -60,6 +60,19 @@ In the Expo project's `production` environment, set the same `EXPO_OWNER`, `EAS_
 `EXPO_PUBLIC_API_URL` (the build machines read the app config again), and `GOOGLE_SERVICES_JSON`
 as a secret file for Android push.
 
+Once the hosted app and the store listings exist, name them. None is a secret, and each must be
+an `https` address or it is ignored:
+
+| Name | Where | What it is |
+| --- | --- | --- |
+| `RAKAZO_CLOUD_URL` | the server, and the desktop build (the workflow passes `APP_URL`) | the hosted app the desktop app opens first |
+| `BRAND_IOS_STORE_URL`, `BRAND_ANDROID_STORE_URL`, `BRAND_ANDROID_APK_URL` | the server | the store listings and the direct Android download |
+| `EXPO_PUBLIC_BRAND_IOS_STORE_URL`, `EXPO_PUBLIC_BRAND_ANDROID_STORE_URL`, `EXPO_PUBLIC_BRAND_ANDROID_APK_URL` | the Expo project's `production` environment | the same three, built into the mobile app |
+
+Until they are set, the apps show no store, review or "update from the store" links.
+
+Lifecycle emails stay off: the deployment sets no `EMAIL_COPY_DIR`.
+
 On the server, set `EXPO_ACCESS_TOKEN` for push delivery, `PASSKEY_APPLE_APP_IDS` and
 `PASSKEY_ANDROID_CERT_SHA256` if the apps should offer passkeys, and the `APNS_VOIP_*` variables
 only if incoming voice calls are wanted.
@@ -109,10 +122,13 @@ Not checked, because each needs an account or a device this branch has never had
 - **Icons are placeholders.** Replace the files in `apps/mobile/assets/brand/agental/` and
   `apps/desktop/assets/brand/agental/` with the real artwork at the same sizes. The mark shown
   inside the mobile app and the iOS widget still uses upstream's image.
-- **Native in-app links keep the upstream scheme.** The notification, widget and shortcut code
-  builds links with `rakazo://`, so the app registers that scheme beside `agental://`. A phone
-  with both apps installed could open the wrong one from such a link. Removing it means
-  changing those native files and testing on devices.
+- **The upstream link scheme is still registered.** Native links (notification taps, the
+  bots-at-work card, shortcuts, answering a call) now use `agental://`: the build hands the
+  scheme to native code through `Info.plist` and the Android manifest
+  (`apps/mobile/plugins/with-link-scheme.js`). `rakazo://` stays registered beside it only until
+  a build has been tested on devices, so a link made by an older build still opens. Remove it by
+  returning one scheme from `appSchemes` in the brand config. The Swift and Kotlin changes have
+  not been compiled: this branch has no Apple or Android toolchain.
 - **"This computer" in the desktop app** downloads and runs upstream's server images. It works,
   but that local server is not the white-label. The macOS build is packaged without the
   downloadable server bundle, because the workflow publishes none, so on a Mac that choice
