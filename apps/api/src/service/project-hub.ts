@@ -18,6 +18,15 @@ export function signHubBody(secret: string, body: string, unixSeconds: number): 
   return `t=${unixSeconds},v1=${mac}`;
 }
 
+/**
+ * What a project's Space presents to the hub's tools: "<project id>.<hex HMAC-SHA256(secret,
+ * "tools:" + project id)>". Both sides can make it and neither stores it; one project's token
+ * opens no other project.
+ */
+export function projectToolsToken(secret: string, projectId: string): string {
+  return `${projectId}.${createHmac("sha256", secret).update(`tools:${projectId}`).digest("hex")}`;
+}
+
 async function post(hub: ProjectHub, payload: unknown): Promise<void> {
   const body = JSON.stringify(payload);
   const response = await (hub.fetch ?? fetch)(hub.url, {

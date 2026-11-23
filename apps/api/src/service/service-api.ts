@@ -1,17 +1,19 @@
 // Modified by Agental: new file in the Agental white-label of Rakazo (Apache-2.0, see NOTICE).
 import { randomBytes } from "node:crypto";
-import type { MemoryStore } from "@rakazo/adapter-kit";
+import type { MemoryStore, SecretRecord } from "@rakazo/adapter-kit";
 import type { TicketChangeNotifier } from "@rakazo/adapters";
 import { createTicket } from "@rakazo/adapters";
 import { createServiceSignInToken, SERVICE_SIGN_IN_PATH } from "@rakazo/auth";
-import type { Actor, Bot } from "@rakazo/contracts";
-import { CreateRoutineInput } from "@rakazo/contracts";
+import type { Actor, Bot, McpServerConfigInput as McpServerConfig } from "@rakazo/contracts";
+import { CreateRoutineInput, McpServerConfigInput } from "@rakazo/contracts";
 import { hasValidBearerToken } from "@rakazo/core/node/secrets-guard";
-import type { PrismaClient } from "@rakazo/db";
+import type { Prisma, PrismaClient } from "@rakazo/db";
 import { createOrganizationWithDefaultSpace, ensureBoard, runAsSystem } from "@rakazo/db";
+import { bestEffort } from "@rakazo/logging";
 import type { Context, Hono } from "hono";
 import * as z from "zod";
 import { routineRowData } from "../routines/routines.js";
+import { projectToolsToken } from "./project-hub.js";
 import type { ProjectType } from "./service-starters.js";
 import { PROJECT_TYPES, STARTER_BOTS, STARTER_ROUTINES } from "./service-starters.js";
 
@@ -49,7 +51,28 @@ export type ServiceApiDeps = {
   ) => Promise<Bot>;
   onTicketChange?: TicketChangeNotifier;
   memory: MemoryStore;
+  /**
+   * The hub's tools for bots (suggest a task, record a decision), when it offers them. Each
+   * provisioned Space is connected to them with a token for its own project.
+   */
+  projectTools?: {
+    url: string;
+    secret: string;
+    prepare: (actor: Actor, input: McpServerConfig) => Promise<StoredCredential>;
+    insert: (
+      tx: Prisma.TransactionClient,
+      actor: Actor,
+      input: McpServerConfig,
+      stored: StoredCredential,
+    ) => Promise<{ id: string }>;
+    /** Checks the new connection in the background so its state shows in settings. */
+    announce: (serverId: string, actor: Actor) => Promise<void>;
+  };
 };
+type StoredCredential = SecretRecord | null;
+
+/** The connection's fixed name in a Space, so provisioning twice makes one. */
+const PROJECT_TOOLS_SLUG = "project";
 
 const externalId = z.string().regex(/^[A-Za-z0-9_-]{1,64}$/);
 const line = (max: number) => z.string().trim().min(1).max(max);
@@ -177,6 +200,7 @@ async function provision(deps: ServiceApiDeps, input: z.infer<typeof ProvisionIn
   }
 
   await seedRoutines(prisma, actor, input.project_type, bots);
+  await connectProjectTools(deps, actor, input.external_project_id, Object.values(bots));
   return {
     space_id: spaceId,
     user_id: user.id,
@@ -184,6 +208,44 @@ async function provision(deps: ServiceApiDeps, input: z.infer<typeof ProvisionIn
     bots,
     sign_in_url: signInUrl(deps, user.id, spaceId),
   };
+}
+
+/**
+ * Connects the Space to the hub's tools and lets every starter bot use them. The owner's approval
+ * setting still decides whether a bot may call one without asking.
+ */
+async function connectProjectTools(
+  deps: ServiceApiDeps,
+  actor: Actor,
+  projectId: string,
+  botIds: string[],
+) {
+  const tools = deps.projectTools;
+  if (!tools) return;
+  const { prisma } = deps;
+  const where = { spaceId: actor.spaceId, userId: actor.userId, slug: PROJECT_TOOLS_SLUG };
+  let server = await prisma.mcpServer.findFirst({ where, select: { id: true } });
+  if (!server) {
+    const config = McpServerConfigInput.parse({
+      slug: PROJECT_TOOLS_SLUG,
+      name: "Project",
+      description: "Suggest tasks and record decisions for this project.",
+      transport: "streamable_http",
+      endpoint: tools.url,
+      headers: { authorization: `Bearer ${projectToolsToken(tools.secret, projectId)}` },
+    });
+    const stored = await tools.prepare(actor, config);
+    server = await prisma.$transaction((tx) => tools.insert(tx, actor, config, stored));
+    const created = server.id;
+    void bestEffort("project tools check", tools.announce(created, actor));
+  }
+  for (const botId of botIds) {
+    await prisma.botMcpServer.upsert({
+      where: { botId_serverId: { botId, serverId: server.id } },
+      create: { spaceId: actor.spaceId, userId: actor.userId, botId, serverId: server.id },
+      update: {},
+    });
+  }
 }
 
 /** Each starter routine once per bot, paused: a schedule only starts when the owner turns it on. */
