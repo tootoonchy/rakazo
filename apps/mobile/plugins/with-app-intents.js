@@ -2,6 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { IOSConfig, withInfoPlist, withXcodeProject } = require("expo/config-plugins");
 const { addPbxGroupWithOwnFiles } = require("./pbx-group");
+const { writeWidgetPlist } = require("./with-link-scheme");
 
 const INTENTS = path.join(__dirname, "..", "ios-intents");
 const WIDGETS = path.join(__dirname, "..", "ios-widgets");
@@ -53,6 +54,8 @@ function withAppIntents(config) {
 
     const widgetDir = path.join(root, WIDGET_TARGET);
     fs.cpSync(WIDGETS, widgetDir, { recursive: true });
+    // Modified by Agental: the widget draws links and shows a name, so it gets the app's own.
+    writeWidgetPlist(path.join(widgetDir, "Info.plist"), config);
     fs.copyFileSync(
       path.join(INTENTS, "VoiceMessageActivity.swift"),
       path.join(widgetDir, "VoiceMessageActivity.swift"),
