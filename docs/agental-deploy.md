@@ -61,6 +61,7 @@ safe to repeat. Without the secret the routes do not exist.
 | `POST /api/v1/service/sign-in-links` | `{ space_id, email }` for a member of the Space. Answers a link that signs that person in and opens the Space. It works once and for one minute. |
 | `POST /api/v1/service/tickets` | `{ space_id, external_id, title, description?, assignee? }`. Puts a ticket on the board for a bot (`operator`, `leads` or `content`), which is woken as for any ticket. |
 | `GET /api/v1/service/tickets` | `?space_id=&external_id=`: where the ticket stands. |
+| `GET /api/v1/service/credits` | `?space_id=`: `{ space_id, has_account, balance_usd }`, the credits the Space has left. `has_account` is false until the Space has been on credits. |
 | `POST /api/v1/service/memory` | `{ space_id, path, content }`: a note every bot in the Space can read, for decisions made in the hub. |
 
 ## Ticket changes

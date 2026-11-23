@@ -28,6 +28,7 @@ import { PROJECT_TYPES, STARTER_BOTS, STARTER_ROUTINES } from "./service-starter
  *   GET  /api/v1/service/tickets        where a ticket stands
  *   POST /api/v1/service/memory         write a note every bot in the Space can read
  *   GET  /api/v1/service/usage          real cost and credits charged per project, for a month
+ *   GET  /api/v1/service/credits        the credits a project's Space has left
  */
 export const SERVICE_API_PATH = "/api/v1/service";
 const MAX_BODY_BYTES = 256 * 1024;
@@ -385,6 +386,27 @@ async function usageReport(prisma: PrismaClient, month: string) {
   };
 }
 
+/**
+ * The credits a Space's organization has left, in dollars. `has_account` is false for a Space
+ * that has never been on credits, so the hub can tell "none yet" from "used up".
+ */
+async function creditsLeft(prisma: PrismaClient, spaceId: string) {
+  const space = await prisma.space.findUnique({
+    where: { id: spaceId },
+    select: { organizationId: true },
+  });
+  if (!space) throw new ServiceError(404, "space_not_found");
+  const account = await prisma.modelCreditAccount.findUnique({
+    where: { organizationId: space.organizationId },
+    select: { balanceMicros: true },
+  });
+  return {
+    space_id: spaceId,
+    has_account: Boolean(account),
+    balance_usd: Number(account?.balanceMicros ?? 0n) / 1_000_000,
+  };
+}
+
 async function signInLink(deps: ServiceApiDeps, input: z.infer<typeof SignInLinkInput>) {
   // Only someone who belongs to the Space gets a link into it.
   const member = await deps.prisma.member.findFirst({
@@ -453,5 +475,9 @@ export function mountServiceApi(app: Hono, deps: ServiceApiDeps) {
     handle(z.object({ month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/) }), (input) =>
       usageReport(deps.prisma, input.month),
     ),
+  );
+  app.get(
+    `${SERVICE_API_PATH}/credits`,
+    handle(z.object({ space_id: line(64) }), (input) => creditsLeft(deps.prisma, input.space_id)),
   );
 }
