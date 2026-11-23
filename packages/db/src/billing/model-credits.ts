@@ -5,8 +5,8 @@ import { MODEL_CREDITS_EXHAUSTED_ERROR, MODEL_UNPRICED_FOR_CREDITS_ERROR } from 
 import type { PrismaClient } from "../database/client.js";
 import { isUniqueViolation } from "../database/prisma-errors.js";
 import type { Prisma } from "../generated/prisma/client.js";
-import { chargedMicros, creditsGrantedCents } from "./cost-markup.js";
-import { enforceModelCreditCap } from "./model-credit-cap.js";
+import { chargedMicros, creditsGrantedCents, dailyCreditCapMicros } from "./cost-markup.js";
+import { enforceDailyCreditCap, enforceModelCreditCap } from "./model-credit-cap.js";
 import {
   allocateCreditLots,
   allocatedMicros,
@@ -231,6 +231,10 @@ export async function reserveModelCredits(
     }
     if (attribution?.userId && account?.modelCreditCapMicros != null)
       await enforceModelCreditCap(tx, attribution.userId, amountMicros);
+    // Modified by Agental: the deployment's daily ceiling, checked only when one is set.
+    const dailyCap = dailyCreditCapMicros();
+    if (dailyCap !== null)
+      await enforceDailyCreditCap(tx, organizationId, amountMicros, dailyCap, now);
     const withheldMicros = await prepareCreditLots(tx, organizationId, now);
     await expireCreditLots(tx, organizationId, now);
     const reserved = await tx.modelCreditAccount.updateMany({

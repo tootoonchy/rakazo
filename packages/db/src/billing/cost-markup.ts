@@ -53,3 +53,18 @@ export function creditsGrantedCents(
   }
   return Math.max(0, purchase.amountCents - fee);
 }
+
+/**
+ * `DAILY_CREDIT_CAP_CENTS`: the most credits one organization's work may take in a UTC day,
+ * whatever its balance. Unset is no cap, the upstream behavior. It bounds what a runaway bot or a
+ * mistake can spend before anyone looks: at the cap new work is refused until the next day.
+ */
+export function dailyCreditCapMicros(env: NodeJS.ProcessEnv = process.env): bigint | null {
+  const raw = env.DAILY_CREDIT_CAP_CENTS?.trim();
+  if (!raw) return null;
+  const cents = Number(raw);
+  if (!Number.isSafeInteger(cents) || cents <= 0) {
+    throw new Error("DAILY_CREDIT_CAP_CENTS must be a whole number of cents above 0");
+  }
+  return BigInt(cents) * 10_000n;
+}
