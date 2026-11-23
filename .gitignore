@@ -34,6 +34,8 @@ infra/sandboxes/supervisor/dist
 artifacts
 !apps/mobile/lib/artifacts
 !packages/contracts/src/artifacts
+# Modified by Agental: the Railway CLI upload follows .gitignore
+!packages/db/src/artifacts
 backups
 test-report
 verify-report
