@@ -45,6 +45,7 @@ describe("withAppIntents prebuild", () => {
   it("refreshes the sources without duplicating their build references", () => {
     const files = new Set();
     const copied = [];
+    const rewritten = [];
     const added = [];
     const widgetSettings = { PRODUCT_NAME: '"RakazoWidgets"' };
     const config = {
@@ -76,6 +77,9 @@ describe("withAppIntents prebuild", () => {
           };
         if (name === "node:path") return { join };
         if (name === "./pbx-group") return createRequire(import.meta.url)("./pbx-group.js");
+        // Modified by Agental: the copied widget Info.plist is rewritten for the app's scheme.
+        if (name === "./with-link-scheme")
+          return { writeWidgetPlist: (file) => rewritten.push(file) };
         if (name === "expo/config-plugins")
           return {
             withInfoPlist: (value, mod) => {
@@ -102,6 +106,7 @@ describe("withAppIntents prebuild", () => {
     module.exports(config);
     module.exports(config);
     expect(plist.modResults.RakazoDefaultApiBase).toBe("https://api.example.test");
+    expect(rewritten).toEqual(Array(2).fill("/project/ios/RakazoWidgets/Info.plist"));
     expect(plist.modResults.UIBackgroundModes).toEqual(["audio"]);
     expect(copied).toContainEqual([
       join(mobile, "ios-intents/RakazoIntents.swift"),

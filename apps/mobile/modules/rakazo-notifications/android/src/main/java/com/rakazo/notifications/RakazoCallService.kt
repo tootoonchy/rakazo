@@ -101,7 +101,9 @@ class RakazoCallService : Service() {
 
   private fun openApp(): PendingIntent {
     val intent = packageManager.getLaunchIntentForPackage(packageName)
-      ?: Intent(Intent.ACTION_VIEW, android.net.Uri.parse("rakazo://"))
+      // Modified by Agental: the app's own scheme, and only ever this app.
+      ?: Intent(Intent.ACTION_VIEW, android.net.Uri.parse("${LinkScheme.of(this)}://"))
+        .setPackage(packageName)
     intent.flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
     return PendingIntent.getActivity(
       this,
