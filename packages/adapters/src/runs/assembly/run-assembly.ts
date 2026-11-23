@@ -1,3 +1,4 @@
+import { projectContextForSpace } from "@rakazo/db";
 import { bestEffort } from "@rakazo/logging";
 import { isMeetingChat, recentChatMeetings } from "../../meetings/meeting-chat.js";
 import { recentMeetingContext } from "../../meetings/meeting-chat.prompt.js";
@@ -88,6 +89,11 @@ export async function assembleRunTurn(services: RunExecutorServices, hold: RunHo
   });
   if (!(await turnMayStillStart(hold, { connected }))) return;
   const fallbacks = await loadModelFallbacks(hold, { records, model, capabilities });
+  // Modified by Agental: the project this Space belongs to, when its owner system described one.
+  const projectContext = await bestEffort(
+    "load project context",
+    projectContextForSpace(hold.deps.prisma, hold.run.spaceId),
+  );
   return {
     saved,
     records,
@@ -102,6 +108,7 @@ export async function assembleRunTurn(services: RunExecutorServices, hold: RunHo
     ctx,
     prompt,
     fallbacks,
+    projectContext,
   };
 }
 

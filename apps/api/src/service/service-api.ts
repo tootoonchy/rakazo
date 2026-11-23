@@ -16,6 +16,7 @@ import {
   ensureBoard,
   runAsSystem,
   setDailyCreditCap,
+  setProjectContext,
 } from "@rakazo/db";
 import { bestEffort } from "@rakazo/logging";
 import type { Context, Hono } from "hono";
@@ -31,6 +32,7 @@ import { PROJECT_TYPES, STARTER_BOTS, STARTER_ROUTINES } from "./service-starter
  * token. One project is one organization with its default Space; everything is safe to repeat.
  *
  *   POST /api/v1/service/spaces         provision a project's Space, bots and routines
+ *   POST /api/v1/service/project        say what the project is and where it stands, for its bots
  *   POST /api/v1/service/sign-in-links  a one-minute, one-time link that signs the owner in
  *   POST /api/v1/service/tickets        put a task on the board, assigned to a bot
  *   GET  /api/v1/service/tickets        where a ticket stands
@@ -94,7 +96,15 @@ const ProvisionInput = z.object({
   email: z.string().trim().toLowerCase().email().max(254),
   name: line(120).optional(),
   project_name: line(120),
+  project_phase: line(40).optional(),
   plan: line(40).optional(),
+});
+const ProjectInput = z.object({
+  space_id: line(64),
+  project_type: z.enum(PROJECT_TYPES),
+  project_name: line(120),
+  /** Left out keeps the stored phase; null removes it. */
+  project_phase: line(40).nullable().optional(),
 });
 const SignInLinkInput = z.object({ space_id: line(64), email: z.string().trim().toLowerCase() });
 const TicketInput = z.object({
@@ -214,6 +224,7 @@ async function provision(deps: ServiceApiDeps, input: z.infer<typeof ProvisionIn
     bots[starter.key] = bot.id;
   }
 
+  await describeProject(prisma, { ...input, space_id: spaceId });
   await seedRoutines(prisma, actor, input.project_type, bots);
   await connectProjectTools(deps, actor, input.external_project_id, Object.values(bots));
   return {
@@ -223,6 +234,29 @@ async function provision(deps: ServiceApiDeps, input: z.infer<typeof ProvisionIn
     bots,
     sign_in_url: signInUrl(deps, user.id, spaceId),
   };
+}
+
+/** Records what the project is, which every bot of its Spaces is told on each turn. */
+async function describeProject(
+  prisma: PrismaClient,
+  input: {
+    space_id: string;
+    project_type: ProjectType;
+    project_name: string;
+    project_phase?: string | null | undefined;
+  },
+) {
+  const space = await prisma.space.findUnique({
+    where: { id: input.space_id },
+    select: { organizationId: true },
+  });
+  if (!space) throw new ServiceError(404, "space_not_found");
+  const project = await setProjectContext(prisma, space.organizationId, {
+    type: input.project_type,
+    name: input.project_name,
+    phase: input.project_phase,
+  });
+  return { space_id: input.space_id, project: { ...project, phase: project.phase ?? null } };
 }
 
 /**
@@ -504,6 +538,10 @@ export function mountServiceApi(app: Hono, deps: ServiceApiDeps) {
   app.post(
     `${SERVICE_API_PATH}/spaces`,
     handle(ProvisionInput, (input) => provision(deps, input)),
+  );
+  app.post(
+    `${SERVICE_API_PATH}/project`,
+    handle(ProjectInput, (input) => describeProject(deps.prisma, input)),
   );
   app.post(
     `${SERVICE_API_PATH}/sign-in-links`,

@@ -112,7 +112,7 @@ final class IncomingCalls: NSObject, PKPushRegistryDelegate, CXProviderDelegate,
     pending.append(call.merging(["action": "answer"]) { _, new in new })
     NotificationCenter.default.post(name: Self.changed, object: nil)
     // A URL alone cannot answer: only the pending native action grants that intent.
-    if let url = URL(string: "rakazo:///") { UIApplication.shared.open(url, options: [:]) }
+    if let url = URL(string: "\(AppLink.scheme):///") { UIApplication.shared.open(url, options: [:]) }
   }
   func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
     // Not joined yet: the server still has it ringing, so this is a decline.
