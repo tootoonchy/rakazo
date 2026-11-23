@@ -18,7 +18,9 @@ three things more. This page says which are built, how they are set, and what is
   the day has taken so far.
 - **Usage alerts, in the app only.** A member is told once when their organization has used
   50%, 80% and all of its credits: what work took since credits were last added, measured
-  against that plus what is left. Adding credits starts the count again. An owner is offered
+  against that plus what is left. Adding credits starts the count again, also for someone who
+  was away when they were added. The app reads the balance again whenever the server signals
+  that runs changed, so a level reached while the app stays open is announced then. An owner is offered
   the billing settings from the alert. The service API reports the same level as `alert_level`
   on `GET /api/v1/service/credits`. No email is sent.
 - **Top up to continue.** When a run stops for want of credits, an owner who can buy them is
@@ -26,6 +28,18 @@ three things more. This page says which are built, how they are set, and what is
   alert at nothing left offers the same. Anyone else keeps the upstream action (connect a model).
   The hub can send an owner straight there: a sign-in link with `open: "billing"`, offered only
   while `top_up_available` is true.
+- **Cheap models by default, premium by opt-in.** `PREMIUM_MODEL_OUTPUT_USD` is a price in
+  dollars per million output tokens. A model the deployment pays for at or above it is premium,
+  and credits run it only for an organization the operator has turned premium models on for:
+  `POST /api/v1/service/credits` with `premium_models: true` (journaled, like the daily cap).
+  Unset, no model is premium, as upstream. The price is the model registry's, or the tariff in
+  `MODEL_CREDIT_OFFERINGS` when the deployment lists its offerings. It is checked when a bot's
+  model is chosen and again before each call, where the person sees "This model is not included
+  in your plan. Choose another model." A model run on a person's own key or subscription is
+  never limited. The model everyone starts on is the deployment's default, chosen by
+  `PI_DEFAULT_PROVIDER` and `PI_DEFAULT_MODEL` (or `defaultOfferingId` in
+  `MODEL_CREDIT_OFFERINGS`): keep it below the threshold. The server warns at startup when it is
+  not, and refuses to start on a threshold that is not a number above 0.
 - **Real cost stays recorded.** `usage_records.costUsd` is still what the provider charged (for
   the hosted model provider, the cost it reports per generation). What was taken is in
   `model_credit_entries`. The two can be compared per organization.
@@ -51,6 +65,37 @@ recorded cost with a customer price, and the markup would be applied on top of i
 | Own key, $99 a month   | The person's own key; only computer minutes metered                            | The existing $99 own-key tier. Calls on the person's key are not charged.                                                                                            |
 | Yearly                 | 10 times the monthly price                                                     | Own-key tiers have a yearly price, set in code at a 20% saving. Credit plans are monthly only.                                                                       |
 
+## Creating the plans in Stripe
+
+`pnpm billing:plans` creates the two plans as Stripe products with a monthly and a yearly price
+each, so they can be reviewed in the dashboard before anyone pays. It reads `STRIPE_SECRET_KEY`
+and runs only with a test-mode key: a live key is refused before any request is sent. Live
+products are made by a person, on purpose.
+
+```sh
+pnpm billing:plans           # prints what it would create or change
+pnpm billing:plans --apply   # makes the changes
+```
+
+| Product  | Monthly | Yearly (10 months) | Lookup keys                                                    |
+| -------- | ------- | ------------------ | -------------------------------------------------------------- |
+| Operator | $200    | $2,000             | `rakazo_monthly_credits_20000`, `rakazo_yearly_credits_200000` |
+| Own Key  | $99     | $990               | `rakazo_byok_max_monthly_9900`, `rakazo_byok_max_yearly_99000` |
+
+Running it again changes nothing. A price is never edited: if an amount here changes, the script
+creates the new price, moves the lookup key to it and archives the old one, which leaves people
+already subscribed to the old price as they are. A product archived or renamed by hand is put
+back. A price billing already sells under its own product (made at a first checkout) is left
+where it is, with its lookup key, so the people subscribed to it keep their tier.
+
+Billing finds a price by its lookup key, so no price id needs to be set anywhere. The two monthly
+prices are the ones billing asks for today. The two yearly prices are not sold by the server yet:
+it has no yearly credit plan, and its yearly own-key price is still the amount in code (see below).
+
+The $50 fee inside the Operator price is not a Stripe setting. The server takes it from each
+monthly payment when `MONTHLY_PLATFORM_FEE_CENTS` is `5000`; the product's metadata records the
+split for whoever reads the dashboard.
+
 ## Not built yet
 
 - **Plan names and prices are code**, in `packages/contracts/src/billing/billing.ts`. Offering
@@ -64,8 +109,6 @@ recorded cost with a customer price, and the markup would be applied on top of i
 - **No alerts.** Warnings at 50, 80 and 100 percent of a client's credits do not exist.
 - **Top-up prompt.** Running out of credits sends the person to model connections, not to a
   top-up screen.
-- **Cheap models by default, premium by opt-in.** The deployment's default model is a setting,
-  but there is no per-plan restriction on which models a client may pick.
 - **Copy.** The plan screens still say credits go to model usage at provider cost, which is not
   true once a markup or a fee is set. That copy must change before either is switched on for
   customers.

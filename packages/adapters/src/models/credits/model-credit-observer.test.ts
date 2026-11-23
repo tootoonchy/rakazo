@@ -2,6 +2,7 @@ import type { ModelCallObserver } from "@rakazo/adapter-kit";
 import {
   creditAccount,
   organizationForMember,
+  premiumModelsAllowed,
   recordModelCreditReceipt,
   reserveModelCredits,
 } from "@rakazo/db";
@@ -14,6 +15,7 @@ vi.mock("@rakazo/db", () => ({
   creditAccount: vi.fn(),
   reserveModelCredits: vi.fn(),
   recordModelCreditReceipt: vi.fn(),
+  premiumModelsAllowed: vi.fn(),
 }));
 
 const scope = { userId: "user-1", spaceId: "space-1" };
@@ -83,6 +85,38 @@ describe("approved model tariffs", () => {
     inputTokensEstimate: 1000000,
     maxOutputTokens: 1000000,
   };
+  // Modified by Agental: the offering's output tariff is $2 per million tokens.
+  it("refuses a premium model before reserving unless the organization opted in", async () => {
+    configure();
+    vi.stubEnv("PREMIUM_MODEL_OUTPUT_USD", "2");
+    vi.mocked(reserveModelCredits).mockResolvedValue("reservation-1");
+    const observer = await hostedModelCreditObserver({} as never, scope);
+    vi.mocked(premiumModelsAllowed).mockResolvedValue(false);
+    await expect(observer.beforeCall(call)).rejects.toThrow(
+      "This model is not included in your plan. Choose another model.",
+    );
+    expect(reserveModelCredits).not.toHaveBeenCalled();
+    // The opt-in is read for each call, so it takes effect without a new run.
+    vi.mocked(premiumModelsAllowed).mockResolvedValue(true);
+    await expect(observer.beforeCall(call)).resolves.toBe("reservation-1");
+    expect(premiumModelsAllowed).toHaveBeenLastCalledWith({}, "org-1");
+  });
+  it("never asks about premium models below the threshold or without one", async () => {
+    configure();
+    vi.mocked(reserveModelCredits).mockResolvedValue("reservation-1");
+    const observer = await hostedModelCreditObserver({} as never, scope);
+    await expect(observer.beforeCall(call)).resolves.toBe("reservation-1");
+    vi.stubEnv("PREMIUM_MODEL_OUTPUT_USD", "2.01");
+    await expect(observer.beforeCall(call)).resolves.toBe("reservation-1");
+    expect(premiumModelsAllowed).not.toHaveBeenCalled();
+  });
+  it("stops the call when the premium threshold is not a usable number", async () => {
+    configure();
+    vi.stubEnv("PREMIUM_MODEL_OUTPUT_USD", "expensive");
+    const observer = await hostedModelCreditObserver({} as never, scope);
+    await expect(observer.beforeCall(call)).rejects.toThrow("PREMIUM_MODEL_OUTPUT_USD");
+    expect(reserveModelCredits).not.toHaveBeenCalled();
+  });
   it("rejects unapproved auxiliary and backup calls before reserving", async () => {
     configure();
     const observer = await hostedModelCreditObserver({} as never, scope);

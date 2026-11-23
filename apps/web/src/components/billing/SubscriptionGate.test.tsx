@@ -106,6 +106,32 @@ it("shows the paywall without access and opens once a recheck finds access", asy
   act(() => root.unmount());
 });
 
+it("reads the balance again when the server says runs changed, for an organization on credits", async () => {
+  api.me.mockResolvedValue({ billingEnabled: true, spaceId: "space-1" });
+  api.status.mockResolvedValue({ access: true, funding: "credits", balanceUsd: 5 });
+  const { root } = await renderGate(true);
+  const reads = api.status.mock.calls.length;
+  await act(async () => {
+    window.dispatchEvent(new Event("rakazo:runs-changed"));
+    await flush();
+  });
+  expect(api.status).toHaveBeenCalledTimes(reads + 1);
+
+  // Someone on their own key has no balance to watch, so the signal reads nothing.
+  api.status.mockResolvedValue({ access: true, funding: "byok", balanceUsd: 0 });
+  await act(async () => {
+    window.dispatchEvent(new Event("focus"));
+    await flush();
+  });
+  const afterSwitch = api.status.mock.calls.length;
+  await act(async () => {
+    window.dispatchEvent(new Event("rakazo:runs-changed"));
+    await flush();
+  });
+  expect(api.status).toHaveBeenCalledTimes(afterSwitch);
+  await act(async () => root.unmount());
+});
+
 it("reloads billing for a newly selected Space", async () => {
   api.me.mockResolvedValue({ billingEnabled: true });
   api.status.mockResolvedValue({ access: false });

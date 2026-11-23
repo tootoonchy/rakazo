@@ -1,5 +1,6 @@
 import { useLingui } from "@lingui/react/macro";
 import type { BillingStatus, Me } from "@rakazo/contracts";
+import { modelCreditsUsd } from "@rakazo/contracts";
 import { Dialog, DialogContent } from "@rakazo/ui-web";
 import type { ReactNode } from "react";
 import { createContext, Suspense, useContext, useEffect, useRef, useState } from "react";
@@ -12,6 +13,7 @@ import type { SupportChat } from "../../lib/platform/support-chat";
 import { useSupportChat } from "../../lib/platform/support-chat";
 import type { RpcClient } from "../../lib/query/rpc";
 import { createSpaceRpc, rpc, SPACE_SELECTED_EVENT, selectedSpaceId } from "../../lib/query/rpc";
+import { RUNS_CHANGED_EVENT } from "../../lib/query/space-changes";
 import { useEventListener } from "../../lib/use-event-listener";
 
 const PaywallPage = lazyComponent(() =>
@@ -20,17 +22,26 @@ const PaywallPage = lazyComponent(() =>
 
 // A status keeps the client of the space it was read for: another tab can select another
 // organization, and a plan choice must bill the one whose prices are on screen.
+// `spaceId` is the Space the status was read for, which another tab's selection never changes.
 type GateState =
   | { kind: "loading" }
-  | { kind: "open"; status?: BillingStatus; client?: RpcClient }
-  | { kind: "paywall"; status: BillingStatus; client: RpcClient };
+  | { kind: "open"; status?: BillingStatus; client?: RpcClient; spaceId?: string | null }
+  | { kind: "paywall"; status: BillingStatus; client: RpcClient; spaceId?: string | null };
 
-const BillingContext = createContext<{ status: BillingStatus | null; showPlans: () => void }>({
+const BillingContext = createContext<{
+  status: BillingStatus | null;
+  spaceId: string | null;
+  showPlans: () => void;
+}>({
   status: null,
+  spaceId: null,
   showPlans: () => undefined,
 });
 
-/** The latest billing status (`null` when the deployment does not bill) and the plan choice. */
+/**
+ * The latest billing status (`null` when the deployment does not bill), the Space it was read
+ * for, and the plan choice.
+ */
 export function useBilling() {
   return useContext(BillingContext);
 }
@@ -44,8 +55,8 @@ function loadMe(): Promise<Me> {
   );
 }
 
-function gateFor(status: BillingStatus, client: RpcClient): GateState {
-  return { kind: status.access ? "open" : "paywall", status, client };
+function gateFor(status: BillingStatus, client: RpcClient, spaceId: string | null): GateState {
+  return { kind: status.access ? "open" : "paywall", status, client, spaceId };
 }
 
 /**
@@ -95,7 +106,7 @@ export function SubscriptionGate({
             name: me.name,
           });
         }
-        return gateFor(status, client);
+        return gateFor(status, client, tabSpaceId.current);
       })
       .catch((): GateState => ({ kind: "open" }))
       .then((next) => {
@@ -123,11 +134,12 @@ export function SubscriptionGate({
   const recheck = (onFailure?: () => void) => {
     if (document.visibilityState === "hidden") return;
     const read = ++latestRead.current;
-    const client = createSpaceRpc(tabSpaceId.current);
+    const spaceId = tabSpaceId.current;
+    const client = createSpaceRpc(spaceId);
     client.billing
       .status()
       .then((status) => {
-        if (read === latestRead.current) setState(gateFor(status, client));
+        if (read === latestRead.current) setState(gateFor(status, client, spaceId));
       })
       .catch(() => {
         if (read === latestRead.current) onFailure?.();
@@ -135,6 +147,13 @@ export function SubscriptionGate({
   };
   useEventListener(billed ? window : null, "focus", () => recheck());
   useEventListener(billed ? document : null, "visibilitychange", () => recheck());
+  // Modified by Agental: a run takes credits, so the server's signal that runs changed is when
+  // the balance and its alerts are read again. Only an organization on credits needs it.
+  const onCredits =
+    state.kind !== "loading" && state.status ? modelCreditsUsd(state.status) !== null : false;
+  useEventListener<EventTarget, string>(onCredits ? window : null, RUNS_CHANGED_EVENT, () =>
+    recheck(),
+  );
   // Another Space can belong to another organization with its own invite link and plan: the
   // previous one's link is dropped at once, and billing reloads for the new one.
   // If the new Space's read fails, nothing of the previous one stays: the app opens without a
@@ -162,7 +181,11 @@ export function SubscriptionGate({
   }
   return (
     <BillingContext.Provider
-      value={{ status: state.status ?? null, showPlans: () => setPlansOpen(true) }}
+      value={{
+        status: state.status ?? null,
+        spaceId: state.spaceId ?? null,
+        showPlans: () => setPlansOpen(true),
+      }}
     >
       {children}
       {state.status && state.client ? (
