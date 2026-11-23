@@ -25,6 +25,7 @@ import { PROJECT_TYPES, STARTER_BOTS, STARTER_ROUTINES } from "./service-starter
  *   POST /api/v1/service/tickets        put a task on the board, assigned to a bot
  *   GET  /api/v1/service/tickets        where a ticket stands
  *   POST /api/v1/service/memory         write a note every bot in the Space can read
+ *   GET  /api/v1/service/usage          real cost and credits charged per project, for a month
  */
 export const SERVICE_API_PATH = "/api/v1/service";
 const MAX_BODY_BYTES = 256 * 1024;
@@ -281,6 +282,47 @@ async function writeMemory(deps: ServiceApiDeps, input: z.infer<typeof MemoryInp
   return { ok: true as const, path: input.path };
 }
 
+/**
+ * Per provisioned project, for one calendar month (UTC): what the model calls really cost, what
+ * was taken from credits for them, and what was paid in. Read from the settled credit entries,
+ * joined to the usage each one paid for, so a guest's usage counts for the organization that
+ * paid. Usage whose recorded cost is already a customer price is left out.
+ */
+async function usageReport(prisma: PrismaClient, month: string) {
+  const from = new Date(`${month}-01T00:00:00.000Z`);
+  const to = new Date(Date.UTC(from.getUTCFullYear(), from.getUTCMonth() + 1, 1));
+  const rows = await prisma.$queryRaw<
+    {
+      slug: string;
+      name: string;
+      cost: number | null;
+      charged: number | null;
+      paid: number | null;
+    }[]
+  >`
+    SELECT o.slug, o.name,
+      (SELECT SUM(u."costUsd") FROM model_credit_entries e JOIN usage_records u ON u."callId" = e."callId"
+        WHERE e."organizationId" = o.id AND e.pending = false AND u.provider <> 'services'
+          AND e."createdAt" >= ${from} AND e."createdAt" < ${to})::float8 AS cost,
+      (SELECT -SUM(e."amountMicros") / 1e6 FROM model_credit_entries e JOIN usage_records u ON u."callId" = e."callId"
+        WHERE e."organizationId" = o.id AND e.pending = false AND u.provider <> 'services'
+          AND e."createdAt" >= ${from} AND e."createdAt" < ${to})::float8 AS charged,
+      (SELECT SUM(e."amountMicros") / 1e6 FROM model_credit_entries e
+        WHERE e."organizationId" = o.id AND e.source LIKE 'purchase:%'
+          AND e."createdAt" >= ${from} AND e."createdAt" < ${to})::float8 AS paid
+    FROM organization o WHERE o.slug LIKE 'project-%' ORDER BY o.slug`;
+  return {
+    month,
+    projects: rows.map((row) => ({
+      external_project_id: row.slug.slice("project-".length),
+      name: row.name,
+      cost_usd: row.cost ?? 0,
+      charged_usd: row.charged ?? 0,
+      credits_granted_usd: row.paid ?? 0,
+    })),
+  };
+}
+
 async function signInLink(deps: ServiceApiDeps, input: z.infer<typeof SignInLinkInput>) {
   // Only someone who belongs to the Space gets a link into it.
   const member = await deps.prisma.member.findFirst({
@@ -343,5 +385,11 @@ export function mountServiceApi(app: Hono, deps: ServiceApiDeps) {
   app.post(
     `${SERVICE_API_PATH}/memory`,
     handle(MemoryInput, (input) => writeMemory(deps, input)),
+  );
+  app.get(
+    `${SERVICE_API_PATH}/usage`,
+    handle(z.object({ month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/) }), (input) =>
+      usageReport(deps.prisma, input.month),
+    ),
   );
 }
