@@ -210,8 +210,11 @@ export async function reserveModelCredits(
   return prisma.$transaction(async (tx) => {
     // Piggyback the nullable cap lookup on the account lock we already take. No extra
     // round trip, journal scan, or user lock for the normal uncapped path.
-    const [account] = await tx.$queryRaw<{ modelCreditCapMicros: bigint | null }[]>`
-      SELECT (SELECT "modelCreditCapMicros" FROM "user" WHERE id=${attribution?.userId ?? null}) AS "modelCreditCapMicros"
+    const [account] = await tx.$queryRaw<
+      { modelCreditCapMicros: bigint | null; dailyCapMicros: bigint | null }[]
+    >`
+      SELECT (SELECT "modelCreditCapMicros" FROM "user" WHERE id=${attribution?.userId ?? null}) AS "modelCreditCapMicros",
+        "dailyCapMicros"
       FROM model_credit_accounts WHERE "organizationId"=${organizationId} FOR UPDATE`;
     const existing = await tx.modelCreditEntry.findUnique({ where: { callId } });
     if (existing) {
@@ -231,8 +234,9 @@ export async function reserveModelCredits(
     }
     if (attribution?.userId && account?.modelCreditCapMicros != null)
       await enforceModelCreditCap(tx, attribution.userId, amountMicros);
-    // Modified by Agental: the deployment's daily ceiling, checked only when one is set.
-    const dailyCap = dailyCreditCapMicros();
+    // Modified by Agental: the organization's own daily ceiling, else the deployment's, checked
+    // only when one is set.
+    const dailyCap = account?.dailyCapMicros ?? dailyCreditCapMicros();
     if (dailyCap !== null)
       await enforceDailyCreditCap(tx, organizationId, amountMicros, dailyCap, now);
     const withheldMicros = await prepareCreditLots(tx, organizationId, now);
