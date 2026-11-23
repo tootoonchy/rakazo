@@ -1,7 +1,7 @@
 import { useLingui } from "@lingui/react/macro";
 import type { BillingStatus, Me } from "@rakazo/contracts";
 import { modelCreditsUsd } from "@rakazo/contracts";
-import { Dialog, DialogContent } from "@rakazo/ui-web";
+import { Dialog, DialogContent, toast } from "@rakazo/ui-web";
 import type { ReactNode } from "react";
 import { createContext, Suspense, useContext, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -27,6 +27,9 @@ type GateState =
   | { kind: "loading" }
   | { kind: "open"; status?: BillingStatus; client?: RpcClient; spaceId?: string | null }
   | { kind: "paywall"; status: BillingStatus; client: RpcClient; spaceId?: string | null };
+
+/** The credit notice's id, so the gate can take it down when the paywall takes over. */
+export const CREDIT_ALERT_TOAST_ID = "credit-alert";
 
 const BillingContext = createContext<{
   status: BillingStatus | null;
@@ -116,6 +119,13 @@ export function SubscriptionGate({
       active = false;
     };
   }, []);
+
+  // Modified by Agental: with nothing left and no plan the paywall replaces the app, and it is
+  // the notice for that state. An earlier credit notice must not stay on top of it.
+  const paywalled = state.kind === "paywall";
+  useEffect(() => {
+    if (paywalled) toast.dismiss(CREDIT_ALERT_TOAST_ID);
+  }, [paywalled]);
 
   // Once billing has answered, checks keep running, even after a later read fails and the gate
   // drops its status.

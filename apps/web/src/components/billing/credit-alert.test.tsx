@@ -18,6 +18,7 @@ vi.mock("@lingui/react/macro", () => ({
 let billing: BillingStatus | null = null;
 let billedSpace = "space-a";
 vi.mock("./SubscriptionGate", () => ({
+  CREDIT_ALERT_TOAST_ID: "credit-alert",
   useBilling: () => ({ status: billing, spaceId: billedSpace, showPlans: () => undefined }),
 }));
 
@@ -156,10 +157,12 @@ it("keeps each Space's history under the Space its status was read for", async (
   expect(alert()).toBeNull();
 });
 
-it("takes its notice down when the app gives way to the paywall", async () => {
+it("keeps its notice when the shell mounts again", async () => {
   await show(credits(20, 80));
   await vi.waitFor(() => expect(alert()?.textContent).toContain("80% of your credits are used."));
-  // The gate closes: the shell and this hook unmount while the toaster above them stays.
+  // The shell can unmount and mount again (a Space switch); the level is already seen, so the
+  // notice must stay rather than vanish for good.
   await act(async () => root.render(<Toaster />));
-  await vi.waitFor(() => expect(alert()).toBeNull());
+  await show(credits(20, 80));
+  expect(alert()?.textContent).toContain("80% of your credits are used.");
 });
