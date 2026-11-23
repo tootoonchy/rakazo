@@ -1,7 +1,7 @@
 // Modified by Agental: new file in the Agental white-label of Rakazo (Apache-2.0, see NOTICE).
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { BRANDS, brandMobileConfig } from "./brand.js";
+import { BRANDS, brandAddresses, brandMobileConfig } from "./brand.js";
 
 const manifest = JSON.parse(
   readFileSync(new URL("../../../../apps/mobile/app.json", import.meta.url), "utf8"),
@@ -43,5 +43,32 @@ describe("brandMobileConfig", () => {
     expect(branded.updates).toBeUndefined();
     expect(branded.extra.eas.projectId).toBeUndefined();
     expect(JSON.stringify(branded)).not.toContain(manifest.extra.eas.projectId);
+  });
+});
+
+describe("brandAddresses", () => {
+  it("takes the hosted app and the store listings from the deployment's settings", () => {
+    expect(
+      brandAddresses({
+        RAKAZO_CLOUD_URL: " https://app.example.com ",
+        BRAND_IOS_STORE_URL: "https://apps.example.com/app/id1",
+        BRAND_ANDROID_STORE_URL: "https://play.example.com/details?id=com.example.app",
+      }),
+    ).toEqual({
+      cloudUrl: "https://app.example.com",
+      stores: {
+        ios: "https://apps.example.com/app/id1",
+        android: "https://play.example.com/details?id=com.example.app",
+        androidApk: "",
+      },
+    });
+  });
+
+  it("leaves anything unset or not https empty, which hides its links", () => {
+    expect(brandAddresses({ RAKAZO_CLOUD_URL: "http://app.example.com" })).toEqual({
+      cloudUrl: "",
+      stores: { ios: "", android: "", androidApk: "" },
+    });
+    expect(brandAddresses().cloudUrl).toBe("");
   });
 });

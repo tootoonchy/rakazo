@@ -74,7 +74,7 @@ const AGENTAL: Brand = {
     desktop: "com.agental.desktop",
     scheme: "agental",
   },
-  // Set when the hosted app and the store listings exist (docs/agental-apps-release.md).
+  // Supplied by the deployment once they exist: see `brandAddresses`.
   cloudUrl: "",
   stores: { ios: "", android: "", androidApk: "" },
   themed: true,
@@ -85,6 +85,45 @@ const AGENTAL: Brand = {
 
 /** Set by the web build (`define` in apps/web/vite.config.ts); absent everywhere else. */
 declare const __RAKAZO_BRAND__: string | undefined;
+/** Node and the mobile bundler have it; a browser does not. */
+declare const process: { env: Record<string, string | undefined> } | undefined;
+
+type Settings = Record<string, string | undefined>;
+const httpsUrl = (value: string | undefined): string => {
+  const url = value?.trim() ?? "";
+  return /^https:\/\/\S+$/.test(url) ? url : "";
+};
+
+/**
+ * Where a white-label's hosted app and store listings are. They do not exist when the code is
+ * written, so the deployment names them: `RAKAZO_CLOUD_URL`, `BRAND_IOS_STORE_URL`,
+ * `BRAND_ANDROID_STORE_URL` and `BRAND_ANDROID_APK_URL`. Anything unset, or not an https
+ * address, stays "", which hides the links that would open it.
+ */
+export function brandAddresses(settings: Settings = {}): Pick<Brand, "cloudUrl" | "stores"> {
+  return {
+    cloudUrl: httpsUrl(settings.RAKAZO_CLOUD_URL),
+    stores: {
+      ios: httpsUrl(settings.BRAND_IOS_STORE_URL),
+      android: httpsUrl(settings.BRAND_ANDROID_STORE_URL),
+      androidApk: httpsUrl(settings.BRAND_ANDROID_APK_URL),
+    },
+  };
+}
+
+/**
+ * The same settings as the mobile app carries them. Its bundler builds in only variables named
+ * `EXPO_PUBLIC_*`, and only where each is written out in full, so they are listed one by one.
+ */
+function mobileSettings(): Settings {
+  if (typeof process === "undefined") return {};
+  return {
+    RAKAZO_CLOUD_URL: process.env.EXPO_PUBLIC_API_URL,
+    BRAND_IOS_STORE_URL: process.env.EXPO_PUBLIC_BRAND_IOS_STORE_URL,
+    BRAND_ANDROID_STORE_URL: process.env.EXPO_PUBLIC_BRAND_ANDROID_STORE_URL,
+    BRAND_ANDROID_APK_URL: process.env.EXPO_PUBLIC_BRAND_ANDROID_APK_URL,
+  };
+}
 
 /**
  * `RAKAZO_BRAND=upstream` keeps the upstream identity. The repository's own unit and end-to-end
@@ -96,16 +135,21 @@ function selectedBrand(): Brand {
   const built = typeof __RAKAZO_BRAND__ === "string" ? __RAKAZO_BRAND__ : "";
   const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
     ?.env;
-  return (built || env?.RAKAZO_BRAND) === "upstream" ? UPSTREAM : AGENTAL;
+  if ((built || env?.RAKAZO_BRAND) === "upstream") return UPSTREAM;
+  const mobile = mobileSettings();
+  const named = Object.fromEntries(
+    Object.keys(mobile).map((name) => [name, env?.[name] ?? mobile[name]]),
+  );
+  return { ...AGENTAL, ...brandAddresses(named) };
 }
 
 export const BRAND: Brand = selectedBrand();
 export const BRANDS = { upstream: UPSTREAM, agental: AGENTAL } as const;
 
 /**
- * The link schemes the mobile app answers to. The brand's own scheme is the one people and other
- * apps use; the upstream scheme stays registered because the native notification, widget and
- * shortcut code builds its in-app links with it.
+ * The link schemes the mobile app answers to. The brand's own scheme comes first: it is the one
+ * people, other apps and the app's own native links use. The upstream scheme stays registered
+ * until a build has been tested on devices, so a link made by an older build still opens.
  */
 export function appSchemes(brand: Brand = BRAND): string[] {
   return [...new Set([brand.appIds.scheme, UPSTREAM.appIds.scheme])];

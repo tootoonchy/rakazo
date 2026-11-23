@@ -43,7 +43,7 @@ Set on the Railway service. Values are never committed.
 | `SERVICE_API_SECRET` | The service API (provisioning, sign-in links, tickets, notes) |
 | `PROJECT_HUB_URL`, `PROJECT_HUB_SECRET` | Where ticket changes are reported, and the signing secret |
 | `PROJECT_HUB_TOOLS_URL` | Optional. The hub's tools for bots (see below). Needs the two above. |
-| `SANDBOX_PROVIDER` and the provider's variables | Bot computers |
+| `SANDBOX_PROVIDER` and the provider's variables | Bot computers. `RAILWAY_API_TOKEN` is one of these: it is needed only with `SANDBOX_PROVIDER=railway`, and the service starts without it otherwise. |
 | The model provider's key | The deployment's default model connection |
 | The integration provider's variables | Clients connecting their own apps (see `docs/self-host-integrations.md`) |
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | Billing (see `docs/self-host-billing.md`) |

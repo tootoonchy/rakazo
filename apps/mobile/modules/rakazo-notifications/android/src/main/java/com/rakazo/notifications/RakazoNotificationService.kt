@@ -362,12 +362,14 @@ class RakazoNotificationService : Service() {
 
   private fun openApp(run: RunRecord? = null): PendingIntent {
     val intent = if (run == null) {
-      packageManager.getLaunchIntentForPackage(packageName) ?: Intent(Intent.ACTION_VIEW, Uri.parse("rakazo://"))
+      // Modified by Agental: the app's own scheme, and only ever this app.
+      packageManager.getLaunchIntentForPackage(packageName)
+        ?: Intent(Intent.ACTION_VIEW, Uri.parse("${LinkScheme.of(this)}://")).setPackage(packageName)
     } else {
       val destination = if (run.groupId != null) {
-        "rakazo://group-thread?groupId=${Uri.encode(run.groupId)}&name=${Uri.encode(run.groupName.orEmpty())}&spaceId=${Uri.encode(run.spaceId)}&threadId=${Uri.encode(run.threadId)}"
+        "${LinkScheme.of(this)}://group-thread?groupId=${Uri.encode(run.groupId)}&name=${Uri.encode(run.groupName.orEmpty())}&spaceId=${Uri.encode(run.spaceId)}&threadId=${Uri.encode(run.threadId)}"
       } else {
-        "rakazo://thread?botId=${Uri.encode(run.botId)}&name=${Uri.encode(run.botName)}&spaceId=${Uri.encode(run.spaceId)}&threadId=${Uri.encode(run.threadId)}"
+        "${LinkScheme.of(this)}://thread?botId=${Uri.encode(run.botId)}&name=${Uri.encode(run.botName)}&spaceId=${Uri.encode(run.spaceId)}&threadId=${Uri.encode(run.threadId)}"
       }
       Intent(
         Intent.ACTION_VIEW,

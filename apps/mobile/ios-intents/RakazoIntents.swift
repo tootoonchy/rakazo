@@ -157,7 +157,9 @@ private func target(
 
 @MainActor
 private func openChat(botId: String, spaceId: String?) async {
-  var link = URLComponents(string: "rakazo://thread")
+  // Modified by Agental: the app's own link scheme, written into Info.plist by the build.
+  let scheme = (Bundle.main.object(forInfoDictionaryKey: "RakazoLinkScheme") as? String) ?? "rakazo"
+  var link = URLComponents(string: "\(scheme)://thread")
   link?.queryItems = [URLQueryItem(name: "botId", value: botId)]
   if let spaceId { link?.queryItems?.append(URLQueryItem(name: "spaceId", value: spaceId)) }
   if let url = link?.url { await UIApplication.shared.open(url) }

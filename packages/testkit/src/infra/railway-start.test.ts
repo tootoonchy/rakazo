@@ -1,5 +1,13 @@
 import { spawnSync } from "node:child_process";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -43,7 +51,10 @@ echo "pnpm $* owner=$owner parent=$parent" >> "$COMMAND_LOG"
 exit 0
 `,
   );
-  write(path.join(bin, "node"), "#!/bin/bash\necho test-environment\n");
+  write(
+    path.join(bin, "node"),
+    `#!/bin/bash\necho "node $*" >> "$COMMAND_LOG.node"\necho test-environment\n`,
+  );
   const result = spawnSync("/bin/bash", [path.join(repoRoot, "infra/railway/start.sh")], {
     cwd: root,
     env: {
@@ -59,7 +70,8 @@ exit 0
   });
   expect(result.error).toBeUndefined();
   const lines = readFileSync(log, "utf8").trim().split("\n").filter(Boolean);
-  return { result, lines };
+  const node = existsSync(`${log}.node`) ? readFileSync(`${log}.node`, "utf8") : "";
+  return { result, lines, node };
 }
 
 // The script drops to the node user with gosu when started as root.
@@ -75,6 +87,15 @@ describe.skipIf(process.getuid?.() === 0)("Railway start script", () => {
       expect(line).toContain("owner=no");
       expect(line).not.toContain("parent=yes");
     }
+  });
+
+  // Modified by Agental: the Railway token is only asked for when computers run on Railway.
+  it("makes the sandbox environment only when computers run on Railway", () => {
+    const other = start({ SANDBOX_PROVIDER: "e2b" });
+    expect(other.node).not.toContain("sandbox-environment.mjs");
+    expect(other.lines.some((line) => line.includes("bootstrap-owner.js"))).toBe(true);
+    expect(start().node).not.toContain("sandbox-environment.mjs");
+    expect(start({ SANDBOX_PROVIDER: "railway" }).node).toContain("sandbox-environment.mjs");
   });
 
   it("serves nothing when migrations fail", () => {
