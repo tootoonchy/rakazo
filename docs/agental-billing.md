@@ -25,6 +25,11 @@ three things more. This page says which are built, how they are set, and what is
   run signals every Space of its organization, because the credits are shared. An owner is offered
   the billing settings from the alert. The service API reports the same level as `alert_level`
   on `GET /api/v1/service/credits`. No email is sent.
+- **Top up to continue.** When a run stops for want of credits, an owner who can buy them is
+  offered "Top up to continue", which opens the billing settings where credits are added. The
+  alert at nothing left offers the same. Anyone else keeps the upstream action (connect a model).
+  The hub can send an owner straight there: a sign-in link with `open: "billing"`, offered only
+  while `top_up_available` is true.
 - **Cheap models by default, premium by opt-in.** `PREMIUM_MODEL_OUTPUT_USD` is a price in
   dollars per million output tokens. A model the deployment pays for at or above it is premium,
   and credits run it only for an organization the operator has turned premium models on for:

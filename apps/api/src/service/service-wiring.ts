@@ -22,7 +22,12 @@ export function mountService(
   app: Hono,
   env: Pick<AppEnv, "serviceApi" | "authUrl" | "projectHub">,
   routerContext: RouterContext,
-  deps: { prisma: PrismaClient; ticketChanges: TicketChangeNotifier; memory: MemoryStore },
+  deps: {
+    prisma: PrismaClient;
+    ticketChanges: TicketChangeNotifier;
+    memory: MemoryStore;
+    topUps: boolean;
+  },
 ): void {
   if (!env.serviceApi) return;
   mountServiceApi(app, {
@@ -32,6 +37,7 @@ export function mountService(
     createBot: routerContext.repos.createBot,
     onTicketChange: deps.ticketChanges,
     memory: deps.memory,
+    topUps: deps.topUps,
     ...(env.projectHub?.toolsUrl
       ? {
           projectTools: {

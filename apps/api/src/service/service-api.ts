@@ -3,7 +3,12 @@ import { randomBytes } from "node:crypto";
 import type { MemoryStore, SecretRecord } from "@rakazo/adapter-kit";
 import type { TicketChangeNotifier } from "@rakazo/adapters";
 import { createTicket, premiumModelOutputUsd } from "@rakazo/adapters";
-import { createServiceSignInToken, SERVICE_SIGN_IN_PATH } from "@rakazo/auth";
+import type { ServiceSignInScreen } from "@rakazo/auth";
+import {
+  createServiceSignInToken,
+  SERVICE_SIGN_IN_PATH,
+  SERVICE_SIGN_IN_SCREENS,
+} from "@rakazo/auth";
 import type { Actor, Bot, McpServerConfigInput as McpServerConfig } from "@rakazo/contracts";
 import { CreateRoutineInput, creditAlertLevel, McpServerConfigInput } from "@rakazo/contracts";
 import { hasValidBearerToken } from "@rakazo/core/node/secrets-guard";
@@ -66,6 +71,11 @@ export type ServiceApiDeps = {
   onTicketChange?: TicketChangeNotifier;
   memory: MemoryStore;
   /**
+   * Whether an owner can buy credits in the app: the two conditions a credit purchase checks
+   * before it opens a checkout (a payments provider that sells credits, and a deployment model).
+   */
+  topUps?: boolean;
+  /**
    * The hub's tools for bots (suggest a task, record a decision), when it offers them. Each
    * provisioned Space is connected to them with a token for its own project.
    */
@@ -108,7 +118,12 @@ const ProjectInput = z.object({
   /** Left out keeps the stored phase; null removes it. */
   project_phase: line(40).nullable().optional(),
 });
-const SignInLinkInput = z.object({ space_id: line(64), email: z.string().trim().toLowerCase() });
+const SignInLinkInput = z.object({
+  space_id: line(64),
+  email: z.string().trim().toLowerCase(),
+  /** A settings screen to show on arrival, such as the one where credits are bought. */
+  open: z.enum(SERVICE_SIGN_IN_SCREENS).optional(),
+});
 const TicketInput = z.object({
   space_id: line(64),
   external_id: externalId,
@@ -176,8 +191,13 @@ async function starterBots(prisma: PrismaClient, spaceId: string) {
   ) as Record<"operator" | "leads" | "content", string | null>;
 }
 
-function signInUrl(deps: ServiceApiDeps, userId: string, spaceId: string): string {
-  const token = createServiceSignInToken(deps.secret, userId, spaceId);
+function signInUrl(
+  deps: ServiceApiDeps,
+  userId: string,
+  spaceId: string,
+  open?: ServiceSignInScreen,
+): string {
+  const token = createServiceSignInToken(deps.secret, userId, spaceId, undefined, open);
   return `${deps.authUrl}/api/auth${SERVICE_SIGN_IN_PATH}?token=${encodeURIComponent(token)}`;
 }
 
@@ -464,7 +484,7 @@ async function usageReport(prisma: PrismaClient, month: string) {
  * The credits a Space's organization has left, in dollars. `has_account` is false for a Space
  * that has never been on credits, so the hub can tell "none yet" from "used up".
  */
-async function creditsLeft(prisma: PrismaClient, spaceId: string) {
+async function creditsLeft(prisma: PrismaClient, spaceId: string, topUps: boolean) {
   const space = await prisma.space.findUnique({
     where: { id: spaceId },
     select: { organizationId: true },
@@ -485,6 +505,8 @@ async function creditsLeft(prisma: PrismaClient, spaceId: string) {
     // 50, 80 or 100 (nothing left), or null below the first.
     used_usd: usedUsd,
     alert_level: account ? creditAlertLevel(balanceUsd, usedUsd) : null,
+    // Whether an owner can buy credits in the app; false until this deployment takes payments.
+    top_up_available: topUps,
     // Null means no daily cap. `daily_cap_own` tells the Space's own cap from the default.
     daily_cap_usd: daily.capMicros === null ? null : usd(daily.capMicros),
     daily_cap_own: daily.own,
@@ -502,7 +524,11 @@ const usd = (micros: bigint) => Number(micros) / 1_000_000;
  * Sets the Space's own daily cap in cents (null returns it to the deployment's default) and
  * whether its credits may pay for premium models. A setting left out is not changed.
  */
-async function setDailyCap(prisma: PrismaClient, input: z.infer<typeof DailyCapInput>) {
+async function setDailyCap(
+  prisma: PrismaClient,
+  input: z.infer<typeof DailyCapInput>,
+  topUps: boolean,
+) {
   const space = await prisma.space.findUnique({
     where: { id: input.space_id },
     select: { organizationId: true },
@@ -516,7 +542,7 @@ async function setDailyCap(prisma: PrismaClient, input: z.infer<typeof DailyCapI
     );
   if (input.premium_models !== undefined)
     await setPremiumModels(prisma, space.organizationId, input.premium_models);
-  return creditsLeft(prisma, input.space_id);
+  return creditsLeft(prisma, input.space_id, topUps);
 }
 
 async function signInLink(deps: ServiceApiDeps, input: z.infer<typeof SignInLinkInput>) {
@@ -526,7 +552,7 @@ async function signInLink(deps: ServiceApiDeps, input: z.infer<typeof SignInLink
     select: { userId: true },
   });
   if (!member) throw new ServiceError(404, "member_not_found");
-  return { sign_in_url: signInUrl(deps, member.userId, input.space_id) };
+  return { sign_in_url: signInUrl(deps, member.userId, input.space_id, input.open) };
 }
 
 export function mountServiceApi(app: Hono, deps: ServiceApiDeps) {
@@ -594,10 +620,12 @@ export function mountServiceApi(app: Hono, deps: ServiceApiDeps) {
   );
   app.get(
     `${SERVICE_API_PATH}/credits`,
-    handle(z.object({ space_id: line(64) }), (input) => creditsLeft(deps.prisma, input.space_id)),
+    handle(z.object({ space_id: line(64) }), (input) =>
+      creditsLeft(deps.prisma, input.space_id, deps.topUps ?? false),
+    ),
   );
   app.post(
     `${SERVICE_API_PATH}/credits`,
-    handle(DailyCapInput, (input) => setDailyCap(deps.prisma, input)),
+    handle(DailyCapInput, (input) => setDailyCap(deps.prisma, input, deps.topUps ?? false)),
   );
 }

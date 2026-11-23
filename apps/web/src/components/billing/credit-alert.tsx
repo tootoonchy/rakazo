@@ -145,7 +145,7 @@ function CreditAlert({ level, canAdd }: { level: CreditAlertLevel; canAdd: boole
         </Button>
         {canAdd ? (
           <Button onClick={addCredits}>
-            <Trans>Add credits</Trans>
+            {level === 100 ? <Trans>Top up to continue</Trans> : <Trans>Add credits</Trans>}
           </Button>
         ) : null}
       </div>

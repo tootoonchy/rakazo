@@ -96,10 +96,12 @@ export {
   pluginSubmissionReviewedEmail,
 } from "./plugin-submission-email.js";
 export { referralEmail } from "./referral-email.js";
+export type { ServiceSignInScreen } from "./service-sign-in.js";
 export {
   createServiceSignInToken,
   readServiceSignInToken,
   SERVICE_SIGN_IN_PATH,
+  SERVICE_SIGN_IN_SCREENS,
 } from "./service-sign-in.js";
 export type { SocialAuthConfig } from "./social.js";
 export { publicSignInProviders, socialAuthFromFields } from "./social.js";

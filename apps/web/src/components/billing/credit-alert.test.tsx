@@ -102,7 +102,7 @@ it("announces each level once, and again only after credits were added", async (
 
   await show(credits(0, 100));
   await vi.waitFor(() => expect(alert()?.textContent).toContain("Your credits are used up."));
-  await act(async () => button("Add credits")?.click());
+  await act(async () => button("Top up to continue")?.click());
   expect(onAddCredits).toHaveBeenCalledTimes(1);
   await vi.waitFor(() => expect(alert()).toBeNull());
 
