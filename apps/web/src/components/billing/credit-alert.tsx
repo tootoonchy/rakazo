@@ -49,8 +49,13 @@ function remember(key: string, seen: Seen) {
   } catch {}
 }
 
+// The mounted shell's way to the billing settings. An open notice outlives a shell that unmounts,
+// so its button asks for the current one when pressed rather than keeping the one it was made by.
+let openBilling: (() => void) | null = null;
+
 export function resetCreditAlertSessionForTests() {
   seenThisSession.clear();
+  openBilling = null;
 }
 
 /**
@@ -65,6 +70,13 @@ export function useCreditAlert(onAddCredits: () => void) {
   const canAdd = Boolean(status?.canManage && status.creditPurchasesEnabled);
   const addCredits = useRef(onAddCredits);
   addCredits.current = onAddCredits;
+  useEffect(() => {
+    const mine = () => addCredits.current();
+    openBilling = mine;
+    return () => {
+      if (openBilling === mine) openBilling = null;
+    };
+  }, []);
   // What the open notice says, so one that stopped being true is taken down.
   const open = useRef<string | null>(null);
   useEffect(() => {
@@ -91,7 +103,7 @@ export function useCreditAlert(onAddCredits: () => void) {
       () => (
         <CreditAlert
           level={level as CreditAlertLevel}
-          onAddCredits={canAdd ? () => addCredits.current() : undefined}
+          onAddCredits={canAdd ? () => openBilling?.() : undefined}
         />
       ),
       {

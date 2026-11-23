@@ -23,8 +23,9 @@ vi.mock("./SubscriptionGate", () => ({
 }));
 
 const onAddCredits = vi.fn();
+let probeAction: () => void = onAddCredits;
 function Probe() {
-  useCreditAlert(onAddCredits);
+  useCreditAlert(probeAction);
   return null;
 }
 
@@ -35,6 +36,7 @@ beforeEach(() => {
   billedSpace = "space-a";
   resetCreditAlertSessionForTests();
   onAddCredits.mockClear();
+  probeAction = onAddCredits;
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -163,6 +165,12 @@ it("keeps its notice when the shell mounts again", async () => {
   // The shell can unmount and mount again (a Space switch); the level is already seen, so the
   // notice must stay rather than vanish for good.
   await act(async () => root.render(<Toaster />));
+  const fromNewShell = vi.fn();
+  probeAction = fromNewShell;
   await show(credits(20, 80));
   expect(alert()?.textContent).toContain("80% of your credits are used.");
+  // Its button opens billing through the shell that is mounted now, not the one that is gone.
+  await act(async () => button("Add credits")?.click());
+  expect(fromNewShell).toHaveBeenCalledTimes(1);
+  expect(onAddCredits).not.toHaveBeenCalled();
 });
