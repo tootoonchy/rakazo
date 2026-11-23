@@ -16,6 +16,8 @@ node_modules
 coverage
 data
 artifacts
+# Modified by Agental: keep the db package's artifacts source in the build context
+!packages/db/src/artifacts
 backups
 design
 PRODUCT_PLAN.md
