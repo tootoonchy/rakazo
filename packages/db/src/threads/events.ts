@@ -49,7 +49,7 @@ import {
   followOrganizationChanges,
   publishOrganizationChange,
 } from "../spaces/organization-changes.js";
-import { followSpaceChanges, publishSpaceChange } from "../spaces/space-changes.js";
+import { followSpaceChanges, publishRuns, publishSpaceChange } from "../spaces/space-changes.js";
 import { SpaceDeletionInProgressError, spaceTakesWork } from "../spaces/spaces.js";
 import { createChatAlerts } from "./chat-alerts.js";
 import {
@@ -774,7 +774,7 @@ export async function finalizeRun(
   const committed = await withTransactionRetry(() => finalizeRunOnce(prisma, input));
   if (!committed) return false;
   await notifyRealtime(realtime, committed.threadId, committed.seq);
-  await publishSpaceChange(realtime, input.spaceId, "runs");
+  await publishRuns(prisma, realtime, input.spaceId);
   const timing = await readRunTimingFields(prisma, input.runId);
   if (committed.firstResponse) {
     getLogger().info("run.first_response", { "run.id": input.runId, ...timing });
