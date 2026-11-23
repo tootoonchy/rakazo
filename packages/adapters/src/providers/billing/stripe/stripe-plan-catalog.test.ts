@@ -55,11 +55,17 @@ function account() {
       Object.assign(existing, { name: form.get("name"), active: true, metadata });
       return Response.json(existing);
     }
-    if (method === "GET" && url.pathname === "/v1/prices")
+    if (method === "GET" && url.pathname === "/v1/prices") {
+      const lookupKey = url.searchParams.get("lookup_keys[0]");
       return Response.json({
-        data: prices.filter((p) => p.active && p.product === url.searchParams.get("product")),
+        data: lookupKey
+          ? prices
+              .filter((p) => p.active && p.lookup_key === lookupKey)
+              .map((p) => ({ ...p, product: { active: products.get(p.product)?.active ?? true } }))
+          : prices.filter((p) => p.active && p.product === url.searchParams.get("product")),
         has_more: false,
       });
+    }
     if (method === "POST" && url.pathname === "/v1/prices") {
       const lookupKey = form.get("lookup_key");
       // The key moves to the new price, as a transferred lookup key does.
@@ -156,6 +162,29 @@ describe("plan catalog", () => {
     expect(stand.prices.filter((price) => price.active && price.unit_amount === 10_900)).toEqual([
       expect.objectContaining({ lookup_key: "rakazo_byok_max_monthly_9900" }),
     ]);
+  });
+
+  it("keeps a price billing already sells under its own product, lookup key and all", async () => {
+    const stand = account();
+    // Billing made the own-key monthly price at a first checkout, and someone is subscribed to it.
+    stand.prices.push({
+      id: "price_billing",
+      product: "prod_billing_inline",
+      active: true,
+      currency: "usd",
+      unit_amount: 9_900,
+      lookup_key: "rakazo_byok_max_monthly_9900",
+      recurring: { interval: "month", interval_count: 1 },
+    });
+    const changes = await sync(stand);
+    expect(changes.filter((change) => change.action === "create_price")).toHaveLength(3);
+    expect(stand.prices.find((price) => price.id === "price_billing")).toMatchObject({
+      active: true,
+      lookup_key: "rakazo_byok_max_monthly_9900",
+    });
+    expect(
+      stand.prices.filter((price) => price.lookup_key === "rakazo_byok_max_monthly_9900"),
+    ).toHaveLength(1);
   });
 
   it("brings back a product that was archived or renamed by hand", async () => {

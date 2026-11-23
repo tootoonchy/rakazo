@@ -168,6 +168,13 @@ export async function syncPlanCatalog(options: SyncPlanCatalogOptions): Promise<
         changes.push({ action: "keep_price", productId, ...price });
         continue;
       }
+      // Billing may have made this price first, under a product of its own, and people may be
+      // subscribed to it. It is kept as it is: moving its lookup key to a new price would leave
+      // those subscriptions on a price billing can no longer tell the tier of.
+      if (await soldElsewhere(request, price)) {
+        changes.push({ action: "keep_price", productId, ...price });
+        continue;
+      }
       changes.push({ action: "create_price", productId, ...price });
       if (options.apply)
         await request("POST", "/v1/prices", {
@@ -176,7 +183,7 @@ export async function syncPlanCatalog(options: SyncPlanCatalogOptions): Promise<
           unit_amount: price.amountCents,
           recurring: { interval: price.interval },
           lookup_key: price.lookupKey,
-          // A price billing made first under its own product gives its key to this one.
+          // Only a price with other terms can still hold this key, and it must stop being found.
           transfer_lookup_key: true,
         });
     }
@@ -196,6 +203,26 @@ type Request = (
   params?: Record<string, unknown>,
   options?: { missing?: boolean },
 ) => Promise<unknown>;
+
+/** Whether an active price with this lookup key and these terms exists under any active product. */
+async function soldElsewhere(request: Request, price: CatalogPrice): Promise<boolean> {
+  const query = encodeStripeForm({
+    active: true,
+    lookup_keys: [price.lookupKey],
+    expand: ["data.product"],
+  });
+  const found = z
+    .object({ data: z.array(priceSchema.extend({ product: z.object({ active: z.boolean() }) })) })
+    .parse(await request("GET", `/v1/prices?${query}`));
+  return found.data.some(
+    (existing) =>
+      existing.product.active &&
+      existing.currency === "usd" &&
+      existing.unit_amount === price.amountCents &&
+      existing.recurring?.interval === price.interval &&
+      existing.recurring.interval_count === 1,
+  );
+}
 
 async function activePrices(request: Request, productId: string) {
   const prices: z.infer<typeof priceSchema>[] = [];

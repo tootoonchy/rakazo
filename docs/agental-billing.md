@@ -57,7 +57,8 @@ pnpm billing:plans --apply   # makes the changes
 Running it again changes nothing. A price is never edited: if an amount here changes, the script
 creates the new price, moves the lookup key to it and archives the old one, which leaves people
 already subscribed to the old price as they are. A product archived or renamed by hand is put
-back.
+back. A price billing already sells under its own product (made at a first checkout) is left
+where it is, with its lookup key, so the people subscribed to it keep their tier.
 
 Billing finds a price by its lookup key, so no price id needs to be set anywhere. The two monthly
 prices are the ones billing asks for today. The two yearly prices are not sold by the server yet:
