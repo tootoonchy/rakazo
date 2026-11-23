@@ -71,6 +71,23 @@ export function readServiceSignInToken(
 }
 
 /**
+ * Where a used link lands. The app picks the Space up from the address and opens it (see
+ * adoptSpaceFromUrl). A settings screen is named on the app's own route, because the root
+ * route forwards a signed-in person there without the address's query.
+ */
+export function serviceSignInLanding(
+  appUrl: string,
+  claim: { space?: string; open?: ServiceSignInScreen },
+): string {
+  const query = new URLSearchParams({
+    ...(claim.space ? { space: claim.space } : {}),
+    ...(claim.open ? { settings: claim.open } : {}),
+  }).toString();
+  if (!query) return appUrl;
+  return `${appUrl}${claim.open ? "/app" : "/"}?${query}`;
+}
+
+/**
  * `GET /api/auth/service-sign-in?token=…`: trades a pass for a session and sends the person to
  * the app. A pass works once: its id is recorded until it would have expired anyway, and a
  * second use is refused. A bad, expired or used pass lands on the ordinary sign-in screen.
@@ -100,13 +117,7 @@ export function serviceSignIn(options: { secret: string; appUrl: string }): Bett
         const session = await ctx.context.internalAdapter.createSession(user.id);
         if (!session) throw new APIError("INTERNAL_SERVER_ERROR");
         await setSessionCookie(ctx, { session, user });
-        // The app picks the Space up from the address and opens it (see adoptSpaceFromUrl), and
-        // shows the settings screen the address names.
-        const landing = new URLSearchParams({
-          ...(claim.space ? { space: claim.space } : {}),
-          ...(claim.open ? { settings: claim.open } : {}),
-        }).toString();
-        throw ctx.redirect(landing ? `${options.appUrl}/?${landing}` : options.appUrl);
+        throw ctx.redirect(serviceSignInLanding(options.appUrl, claim));
       }),
     },
   };

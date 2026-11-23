@@ -4,6 +4,7 @@ import {
   createServiceSignInToken,
   readServiceSignInToken,
   SERVICE_SIGN_IN_TTL_SECONDS,
+  serviceSignInLanding,
 } from "./service-sign-in.js";
 
 const secret = "a-service-secret-that-is-long-enough-000";
@@ -24,6 +25,15 @@ describe("service sign-in pass", () => {
     // Signed by the same secret but naming a screen this server does not offer.
     const unknown = createServiceSignInToken(secret, "user_1", "space_1", at, "admin" as "billing");
     expect(readServiceSignInToken(secret, unknown, at)).not.toHaveProperty("open");
+  });
+
+  it("lands a settings screen on the app's own route, which keeps the address's query", () => {
+    const app = "https://app.example.test";
+    expect(serviceSignInLanding(app, { space: "space_1", open: "billing" })).toBe(
+      `${app}/app?space=space_1&settings=billing`,
+    );
+    expect(serviceSignInLanding(app, { space: "space_1" })).toBe(`${app}/?space=space_1`);
+    expect(serviceSignInLanding(app, {})).toBe(app);
   });
 
   it("is refused once it has expired", () => {
