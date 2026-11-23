@@ -59,9 +59,12 @@ export function useCreditAlert(onAddCredits: () => void) {
     if (!status) return;
     const key = `${CREDIT_ALERT_KEY}.${selectedSpaceId() ?? ""}`;
     const seen = lastSeen(key);
-    // A level seen in an earlier refill says nothing about this one.
+    // A level seen in an earlier refill says nothing about this one. Within a refill the highest
+    // level stays seen: a hold that settles for less can dip under a level without credits
+    // having been added, and passing it again is not news.
     const before = seen?.refill === refill ? seen.level : 0;
-    if (seen?.refill !== refill || seen.level !== level) remember(key, { refill, level });
+    if (seen?.refill !== refill || level > before)
+      remember(key, { refill, level: Math.max(before, level) });
     const about = `${key}|${refill}|${level}`;
     const announce = level > before;
     // Another Space, a refill, or a level that no longer holds: the open notice is out of date.

@@ -88,9 +88,9 @@ it("announces each level once, and again only after credits were added", async (
   await vi.waitFor(() => expect(alert()).toBeNull());
 
   // A refill starts over: nothing at once, then the first level again.
-  await show(credits(100, 0));
+  await show(credits(100, 0, true, "2027-02-01"));
   expect(alert()).toBeNull();
-  await show(credits(50, 50));
+  await show(credits(50, 50, true, "2027-02-01"));
   await vi.waitFor(() => expect(alert()?.textContent).toContain("50% of your credits are used."));
 });
 
@@ -120,4 +120,17 @@ it("takes down a notice that a refill made untrue", async () => {
   // Credits were added in another window; the next status no longer has a level to report.
   await show(credits(100, 0, true, "2027-02-01"));
   await vi.waitFor(() => expect(alert()).toBeNull());
+});
+
+it("does not repeat a level that a settled hold dipped under without a refill", async () => {
+  await show(credits(20, 80));
+  await vi.waitFor(() => expect(alert()?.textContent).toContain("80% of your credits are used."));
+  // The hold settles for less: under half used again, so the notice no longer holds.
+  await show(credits(60, 40));
+  await vi.waitFor(() => expect(alert()).toBeNull());
+  // The next hold passes the same levels in the same refill: nothing new to say.
+  await show(credits(20, 80));
+  expect(alert()).toBeNull();
+  await show(credits(0, 100));
+  await vi.waitFor(() => expect(alert()?.textContent).toContain("Your credits are used up."));
 });
