@@ -88,6 +88,23 @@ dbTests("model credits ledger", () => {
     await expect(reserveModelCredits(prisma, organizationId, 0.01)).rejects.toThrow("credits");
     expect(await balance()).toBe(0n);
   });
+  it("refuses new work at the day's cap whatever the balance, and allows it again the next day", async () => {
+    vi.stubEnv("DAILY_CREDIT_CAP_CENTS", "500");
+    await reconcileCreditPurchase(prisma, organizationId, {
+      id: `${organizationId}-daily`,
+      amountCents: 5000,
+    });
+    // $3 held and $2 really taken leaves $3 of the day's $5.
+    const first = await reserveModelCredits(prisma, organizationId, 3);
+    await prisma.$transaction((tx) => settleModelCreditsTx(tx, first, 2));
+    // A hold counts in full while it is open, so work in flight cannot overshoot the day.
+    await reserveModelCredits(prisma, organizationId, 3);
+    await expect(reserveModelCredits(prisma, organizationId, 0.01)).rejects.toThrow("Daily");
+    expect(await balance()).toBe(45_000_000n);
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    await reserveModelCredits(prisma, organizationId, 3, undefined, tomorrow);
+    expect(await balance()).toBe(42_000_000n);
+  });
   it("holds disputed credits, returns them when the dispute is won, and never past a refund", async () => {
     const id = `${organizationId}-dispute`;
     await reconcileCreditPurchase(prisma, organizationId, { id, amountCents: 2000 });

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { MODEL_CREDIT_CAP_REACHED_ERROR } from "@rakazo/core";
+import { MODEL_CREDIT_CAP_REACHED_ERROR, MODEL_CREDIT_DAILY_CAP_ERROR } from "@rakazo/core";
 import type { PrismaClient } from "../database/client.js";
 import { runAsSystemInTransaction } from "../database/row-security.js";
 import type { Prisma } from "../generated/prisma/client.js";
@@ -27,6 +27,26 @@ export async function enforceModelCreditCap(
     if ((await committedModelCredits(tx, userId)) + reservationMicros > user.modelCreditCapMicros)
       throw new Error(MODEL_CREDIT_CAP_REACHED_ERROR);
   });
+}
+
+/**
+ * Modified by Agental: the deployment's daily ceiling per organization. Holds count as well as
+ * settled calls, so work in flight cannot overshoot it. The caller holds the account lock, which
+ * orders this organization's reservations.
+ */
+export async function enforceDailyCreditCap(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  reservationMicros: bigint,
+  capMicros: bigint,
+  now: Date,
+) {
+  const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const [row] = await tx.$queryRaw<{ micros: bigint }[]>`
+    SELECT COALESCE(-SUM("amountMicros"), 0)::bigint AS micros
+    FROM model_credit_entries
+    WHERE "organizationId"=${organizationId} AND "callId" IS NOT NULL AND "createdAt" >= ${dayStart}`;
+  if (row!.micros + reservationMicros > capMicros) throw new Error(MODEL_CREDIT_DAILY_CAP_ERROR);
 }
 
 /** Operator-only control; no user-facing mutation exposes this setting. Null removes the cap. */

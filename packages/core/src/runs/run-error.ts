@@ -52,6 +52,10 @@ export const MODEL_UNPRICED_FOR_CREDITS_ERROR =
 /** An operator-set usage ceiling; buying credits does not lift it. */
 export const MODEL_CREDIT_CAP_REACHED_ERROR = "Usage limit reached. Contact support to continue.";
 
+/** Modified by Agental: the deployment's ceiling on one day's credits; it lifts at the next UTC day. */
+export const MODEL_CREDIT_DAILY_CAP_ERROR =
+  "Daily usage limit reached. Work can continue tomorrow.";
+
 /** A run in a billing organization without a paid plan, credits, or free period. */
 export const MODEL_ACCESS_REQUIRED_RUN_ERROR = "Subscribe in Billing to keep running bots.";
 
@@ -132,6 +136,7 @@ const APP_RUN_ERRORS = new Set([
   ...MODEL_CONNECTION_RUN_ERRORS,
   MODEL_ACCESS_REQUIRED_RUN_ERROR,
   MODEL_CREDIT_CAP_REACHED_ERROR,
+  MODEL_CREDIT_DAILY_CAP_ERROR,
   COMPUTER_RATE_LIMIT_ERROR,
   COMPUTER_PROVIDER_UNAVAILABLE_ERROR,
   COMPUTER_UNRESPONSIVE_ERROR,
