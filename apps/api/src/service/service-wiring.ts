@@ -20,7 +20,7 @@ export function reportTicketsToHub(
 /** Mounts the service API when `SERVICE_API_SECRET` is set; without it the routes do not exist. */
 export function mountService(
   app: Hono,
-  env: Pick<AppEnv, "serviceApi" | "authUrl">,
+  env: Pick<AppEnv, "serviceApi" | "authUrl" | "projectHub">,
   routerContext: RouterContext,
   deps: { prisma: PrismaClient; ticketChanges: TicketChangeNotifier; memory: MemoryStore },
 ): void {
@@ -32,5 +32,19 @@ export function mountService(
     createBot: routerContext.repos.createBot,
     onTicketChange: deps.ticketChanges,
     memory: deps.memory,
+    ...(env.projectHub?.toolsUrl
+      ? {
+          projectTools: {
+            url: env.projectHub.toolsUrl,
+            secret: env.projectHub.secret,
+            prepare: routerContext.prepareMcpServer,
+            insert: routerContext.insertMcpServer,
+            announce: async (serverId, actor) => {
+              const row = await deps.prisma.mcpServer.findUnique({ where: { id: serverId } });
+              if (row) await routerContext.announceMcpServer(row, actor);
+            },
+          },
+        }
+      : {}),
   });
 }

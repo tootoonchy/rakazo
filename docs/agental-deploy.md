@@ -42,6 +42,7 @@ Set on the Railway service. Values are never committed.
 | `TICKET_BOARD_ENABLED` | `true`, so every Space has its board |
 | `SERVICE_API_SECRET` | The service API (provisioning, sign-in links, tickets, notes) |
 | `PROJECT_HUB_URL`, `PROJECT_HUB_SECRET` | Where ticket changes are reported, and the signing secret |
+| `PROJECT_HUB_TOOLS_URL` | Optional. The hub's tools for bots (see below). Needs the two above. |
 | `SANDBOX_PROVIDER` and the provider's variables | Bot computers |
 | The model provider's key | The deployment's default model connection |
 | The integration provider's variables | Clients connecting their own apps (see `docs/self-host-integrations.md`) |
@@ -69,6 +70,16 @@ external_id, ref, title, status, assignee, updated_at, completed_at, comments }`
 `X-Agental-Signature: t=<unix seconds>,v1=<hex HMAC-SHA256(secret, t + "." + body)>`. Delivery is
 tried a few times and never holds up the ticket change; the hub can always read the current
 state with `GET /api/v1/service/tickets`.
+
+## Tools for bots
+
+With `PROJECT_HUB_TOOLS_URL` set, provisioning also connects the Space to the hub's tools (an
+MCP server over HTTP) and lets the three starter bots use them. The hub decides which tools
+exist; today a bot can suggest a task for the project's board and record a decision in its log.
+The Space presents `Authorization: Bearer <project id>.<hex HMAC-SHA256(PROJECT_HUB_SECRET,
+"tools:" + project id)>`, so each Space reaches its own project and no other, and the token is
+stored like any other server credential. The connection is made once per Space. The owner's
+approval setting still decides whether a bot may call a tool without asking.
 
 ## Not done here
 
