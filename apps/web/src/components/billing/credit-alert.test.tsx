@@ -16,8 +16,9 @@ vi.mock("@lingui/react/macro", () => ({
 }));
 
 let billing: BillingStatus | null = null;
+let billedSpace = "space-a";
 vi.mock("./SubscriptionGate", () => ({
-  useBilling: () => ({ status: billing, showPlans: () => undefined }),
+  useBilling: () => ({ status: billing, spaceId: billedSpace, showPlans: () => undefined }),
 }));
 
 const onAddCredits = vi.fn();
@@ -30,6 +31,7 @@ let host: HTMLDivElement;
 let root: ReturnType<typeof createRoot>;
 beforeEach(() => {
   localStorage.clear();
+  billedSpace = "space-a";
   resetCreditAlertSessionForTests();
   onAddCredits.mockClear();
   host = document.createElement("div");
@@ -133,4 +135,23 @@ it("does not repeat a level that a settled hold dipped under without a refill", 
   expect(alert()).toBeNull();
   await show(credits(0, 100));
   await vi.waitFor(() => expect(alert()?.textContent).toContain("Your credits are used up."));
+});
+
+it("keeps each Space's history under the Space its status was read for", async () => {
+  await show(credits(20, 80));
+  await vi.waitFor(() => expect(alert()?.textContent).toContain("80% of your credits are used."));
+  await act(async () => button("Dismiss")?.click());
+  await vi.waitFor(() => expect(alert()).toBeNull());
+
+  // Another Space at the same level in the same refill has its own history, so it is told.
+  billedSpace = "space-b";
+  await show(credits(20, 80));
+  await vi.waitFor(() => expect(alert()?.textContent).toContain("80% of your credits are used."));
+  await act(async () => button("Dismiss")?.click());
+  await vi.waitFor(() => expect(alert()).toBeNull());
+
+  // Back in the first Space nothing was overwritten: its level is still seen.
+  billedSpace = "space-a";
+  await show(credits(20, 80));
+  expect(alert()).toBeNull();
 });

@@ -22,17 +22,26 @@ const PaywallPage = lazyComponent(() =>
 
 // A status keeps the client of the space it was read for: another tab can select another
 // organization, and a plan choice must bill the one whose prices are on screen.
+// `spaceId` is the Space the status was read for, which another tab's selection never changes.
 type GateState =
   | { kind: "loading" }
-  | { kind: "open"; status?: BillingStatus; client?: RpcClient }
-  | { kind: "paywall"; status: BillingStatus; client: RpcClient };
+  | { kind: "open"; status?: BillingStatus; client?: RpcClient; spaceId?: string | null }
+  | { kind: "paywall"; status: BillingStatus; client: RpcClient; spaceId?: string | null };
 
-const BillingContext = createContext<{ status: BillingStatus | null; showPlans: () => void }>({
+const BillingContext = createContext<{
+  status: BillingStatus | null;
+  spaceId: string | null;
+  showPlans: () => void;
+}>({
   status: null,
+  spaceId: null,
   showPlans: () => undefined,
 });
 
-/** The latest billing status (`null` when the deployment does not bill) and the plan choice. */
+/**
+ * The latest billing status (`null` when the deployment does not bill), the Space it was read
+ * for, and the plan choice.
+ */
 export function useBilling() {
   return useContext(BillingContext);
 }
@@ -46,8 +55,8 @@ function loadMe(): Promise<Me> {
   );
 }
 
-function gateFor(status: BillingStatus, client: RpcClient): GateState {
-  return { kind: status.access ? "open" : "paywall", status, client };
+function gateFor(status: BillingStatus, client: RpcClient, spaceId: string | null): GateState {
+  return { kind: status.access ? "open" : "paywall", status, client, spaceId };
 }
 
 /**
@@ -97,7 +106,7 @@ export function SubscriptionGate({
             name: me.name,
           });
         }
-        return gateFor(status, client);
+        return gateFor(status, client, tabSpaceId.current);
       })
       .catch((): GateState => ({ kind: "open" }))
       .then((next) => {
@@ -125,11 +134,12 @@ export function SubscriptionGate({
   const recheck = (onFailure?: () => void) => {
     if (document.visibilityState === "hidden") return;
     const read = ++latestRead.current;
-    const client = createSpaceRpc(tabSpaceId.current);
+    const spaceId = tabSpaceId.current;
+    const client = createSpaceRpc(spaceId);
     client.billing
       .status()
       .then((status) => {
-        if (read === latestRead.current) setState(gateFor(status, client));
+        if (read === latestRead.current) setState(gateFor(status, client, spaceId));
       })
       .catch(() => {
         if (read === latestRead.current) onFailure?.();
@@ -171,7 +181,11 @@ export function SubscriptionGate({
   }
   return (
     <BillingContext.Provider
-      value={{ status: state.status ?? null, showPlans: () => setPlansOpen(true) }}
+      value={{
+        status: state.status ?? null,
+        spaceId: state.spaceId ?? null,
+        showPlans: () => setPlansOpen(true),
+      }}
     >
       {children}
       {state.status && state.client ? (

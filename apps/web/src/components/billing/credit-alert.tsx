@@ -4,7 +4,6 @@ import type { CreditAlertLevel } from "@rakazo/contracts";
 import { creditAlertLevel, modelCreditsUsd } from "@rakazo/contracts";
 import { Button, toast } from "@rakazo/ui-web";
 import { useEffect, useRef } from "react";
-import { selectedSpaceId } from "../../lib/query/rpc";
 import { useBilling } from "./SubscriptionGate";
 
 const TOAST_ID = "credit-alert";
@@ -59,7 +58,8 @@ export function resetCreditAlertSessionForTests() {
  * `onAddCredits` opens the place to buy more; only someone who can buy is offered it.
  */
 export function useCreditAlert(onAddCredits: () => void) {
-  const { status } = useBilling();
+  // The Space the status was read for: another tab can select a different one at any time.
+  const { status, spaceId } = useBilling();
   const level = creditAlertLevel(modelCreditsUsd(status), status?.creditsUsedUsd ?? 0) ?? 0;
   const refill = refillMark(status?.creditsAddedAt ?? "");
   const canAdd = Boolean(status?.canManage && status.creditPurchasesEnabled);
@@ -70,7 +70,7 @@ export function useCreditAlert(onAddCredits: () => void) {
   useEffect(() => {
     // No status yet says nothing about the level, so it must not reset what was seen.
     if (!status) return;
-    const key = `${CREDIT_ALERT_KEY}.${selectedSpaceId() ?? ""}`;
+    const key = `${CREDIT_ALERT_KEY}.${spaceId ?? ""}`;
     const seen = lastSeen(key);
     // A level seen in an earlier refill says nothing about this one. Within a refill the highest
     // level stays seen: a hold that settles for less can dip under a level without credits
@@ -104,7 +104,7 @@ export function useCreditAlert(onAddCredits: () => void) {
         },
       },
     );
-  }, [status, level, refill, canAdd]);
+  }, [status, spaceId, level, refill, canAdd]);
 }
 
 function CreditAlert({
