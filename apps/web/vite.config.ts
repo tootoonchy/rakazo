@@ -54,7 +54,11 @@ export default defineConfig(({ command, mode }) => {
         },
       },
     },
-    define: { "import.meta.env.RAKAZO_BUILD": JSON.stringify(buildId) },
+    define: {
+      "import.meta.env.RAKAZO_BUILD": JSON.stringify(buildId),
+      // Modified by Agental: the brand a build is for; unset is the white-label (see brand.ts).
+      __RAKAZO_BRAND__: JSON.stringify(process.env.RAKAZO_BRAND ?? rootEnv.RAKAZO_BRAND ?? ""),
+    },
     plugins: [
       {
         // The API reads this to name the deployed build, and a tab fetches it to confirm the

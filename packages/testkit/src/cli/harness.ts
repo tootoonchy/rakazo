@@ -123,6 +123,8 @@ async function main() {
       process.env.MCP_STDIO_ALLOWED_COMMANDS = "echo";
     }
     process.env.CI = "1";
+    // Modified by Agental: these suites are written upstream and name the upstream product.
+    process.env.RAKAZO_BRAND ??= "upstream";
 
     execSync("pnpm --filter @rakazo/db generate", { stdio: "inherit", env: process.env });
     execSync("pnpm db:migrate", { stdio: "inherit", env: process.env });
