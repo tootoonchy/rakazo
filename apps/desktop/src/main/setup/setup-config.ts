@@ -1,13 +1,18 @@
 import { createHash } from "node:crypto";
 import type { DesktopSetup, DesktopStackProbeResponse } from "@rakazo/contracts";
 import { parseServerHeaders } from "@rakazo/contracts";
+import { BRAND } from "@rakazo/contracts/brand";
 import { isLoopbackHost, isPrivateNetworkHost } from "@rakazo/contracts/network-host";
 import { t } from "../i18n.js";
 
 /** Managed desktop origin; development keeps its usual web/API ports. */
 export const DEFAULT_LOCAL_WEB_URL = "http://127.0.0.1:45173";
-/** Hosted Rakazo; setup saves it as an `existing` server so it opens like any other. */
-export const RAKAZO_CLOUD_URL = "https://app.rakazo.com";
+/**
+ * Hosted Rakazo; setup saves it as an `existing` server so it opens like any other.
+ * Modified by Agental: the brand names it, a build can set it (`RAKAZO_CLOUD_URL`, inlined by the
+ * bundler), and "" means there is none, so a first launch asks where to connect.
+ */
+export const RAKAZO_CLOUD_URL = process.env.RAKAZO_CLOUD_URL?.trim() || BRAND.cloudUrl;
 export const PROBE_RESPONSE_LIMIT_BYTES = 64 * 1024;
 
 export const SETUP_FILE_NAME = "setup.json";
@@ -143,6 +148,7 @@ export function resolveStartupTarget(input: {
     if (saved !== null) return { kind: "app", url: saved.serverUrl, source: "saved" };
     return { kind: "setup" };
   }
+  if (!RAKAZO_CLOUD_URL) return { kind: "setup" };
   return { kind: "app", url: RAKAZO_CLOUD_URL, source: "cloud" };
 }
 

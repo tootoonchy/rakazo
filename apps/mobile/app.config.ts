@@ -1,8 +1,11 @@
+import { existsSync } from "node:fs";
+import path from "node:path";
+import { BRAND, brandMobileConfig, UPSTREAM_NAME } from "@rakazo/contracts/brand";
 import type { ConfigContext, ExpoConfig } from "expo/config";
 
 const RELEASE_PROFILES = new Set(["production", "android-apk", "diagnostic"]);
 
-export default ({ config }: ConfigContext): ExpoConfig => {
+export default ({ config, projectRoot }: ConfigContext): ExpoConfig => {
   if (RELEASE_PROFILES.has(process.env.EAS_BUILD_PROFILE ?? "")) {
     const apiUrl = process.env.EXPO_PUBLIC_API_URL;
     if (!apiUrl) {
@@ -22,7 +25,20 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     }
   }
 
-  let result = config as ExpoConfig;
+  // Modified by Agental: app.json stays as upstream wrote it and the brand is applied here. A
+  // white-label build belongs to its own Expo project, named by EXPO_OWNER and EAS_PROJECT_ID.
+  const project = { owner: process.env.EXPO_OWNER, projectId: process.env.EAS_PROJECT_ID };
+  if (
+    BRAND.name !== UPSTREAM_NAME &&
+    RELEASE_PROFILES.has(process.env.EAS_BUILD_PROFILE ?? "") &&
+    !(project.owner && project.projectId)
+  ) {
+    throw new Error("EXPO_OWNER and EAS_PROJECT_ID must name this brand's Expo project.");
+  }
+  let result = brandMobileConfig(config as ExpoConfig, project);
+  if (BRAND.name !== UPSTREAM_NAME) {
+    result = brandArtwork(result, projectRoot, `./assets/brand/${BRAND.appIds.scheme}`);
+  }
   const rpId = passkeyRpId(process.env.EXPO_PUBLIC_API_URL);
   if (rpId) {
     // Native passkeys only work for domains the binary is associated with, so the app reads the
@@ -74,6 +90,30 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   }
   return result;
 };
+
+/**
+ * The brand's own icon files, wherever the config names one of upstream's: a file in `folder`
+ * replaces the file of the same name in `./assets`. The iOS icon is upstream's layered icon
+ * file, which a brand replaces with its plain icon.
+ */
+function brandArtwork(config: ExpoConfig, projectRoot: string, folder: string): ExpoConfig {
+  const own = (file: string) => existsSync(path.join(projectRoot, folder, file));
+  const swap = (value: unknown): unknown => {
+    if (typeof value === "string") {
+      const file = /^\.\/assets\/([^/]+\.png)$/.exec(value)?.[1];
+      return file && own(file) ? `${folder}/${file}` : value;
+    }
+    if (Array.isArray(value)) return value.map(swap);
+    if (value && typeof value === "object") {
+      return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, swap(item)]));
+    }
+    return value;
+  };
+  const result = swap(config) as ExpoConfig;
+  return own("icon.png")
+    ? { ...result, ios: { ...result.ios, icon: `${folder}/icon.png` } }
+    : result;
+}
 
 /** The default server's host when native passkeys can use it: HTTPS and a domain name. */
 function passkeyRpId(apiUrl: string | undefined): string | null {

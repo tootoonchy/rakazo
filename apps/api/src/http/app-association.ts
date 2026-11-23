@@ -1,7 +1,8 @@
+import { BRAND } from "@rakazo/contracts/brand";
 import type { Hono } from "hono";
 
-/** Package of the Rakazo Android app (apps/mobile/app.json). */
-const ANDROID_PACKAGE = "com.rakazo.app";
+/** Modified by Agental: package of the Android app (apps/mobile/app.json, as the brand ships it). */
+const ANDROID_PACKAGE = BRAND.appIds.android;
 
 /**
  * Which native apps can use this server's passkeys: only those the domain vouches for

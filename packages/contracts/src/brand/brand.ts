@@ -15,6 +15,10 @@ export type Brand = {
   links: { privacy: string; terms: string; support: string };
   /** Native app identifiers. Changing one makes a new app listing, so they are set once. */
   appIds: { ios: string; android: string; desktop: string; scheme: string };
+  /** The hosted app the desktop app opens first; "" asks where to connect instead. */
+  cloudUrl: string;
+  /** Where the mobile apps are listed; "" until a listing exists, which hides its links. */
+  stores: { ios: string; android: string; androidApk: string };
   /** Whether the brand ships its own colors, fonts and corners (`brand/theme/theme.json`). */
   themed: boolean;
   /** Folder under the web app's public files holding this brand's icons ("" keeps upstream's). */
@@ -43,6 +47,12 @@ const UPSTREAM: Brand = {
     desktop: "dev.rakazo.desktop",
     scheme: "rakazo",
   },
+  cloudUrl: "https://app.rakazo.com",
+  stores: {
+    ios: "https://apps.apple.com/app/rakazo/id6801531099",
+    android: "https://play.google.com/store/apps/details?id=com.rakazo.app",
+    androidApk: "https://github.com/elie222/rakazo/releases/download/android/rakazo.apk",
+  },
   themed: false,
   iconPath: "",
   upstreamPromos: true,
@@ -64,6 +74,9 @@ const AGENTAL: Brand = {
     desktop: "com.agental.desktop",
     scheme: "agental",
   },
+  // Set when the hosted app and the store listings exist (docs/agental-apps-release.md).
+  cloudUrl: "",
+  stores: { ios: "", android: "", androidApk: "" },
   themed: true,
   iconPath: "/brand/agental",
   upstreamPromos: false,
@@ -88,6 +101,15 @@ function selectedBrand(): Brand {
 
 export const BRAND: Brand = selectedBrand();
 export const BRANDS = { upstream: UPSTREAM, agental: AGENTAL } as const;
+
+/**
+ * The link schemes the mobile app answers to. The brand's own scheme is the one people and other
+ * apps use; the upstream scheme stays registered because the native notification, widget and
+ * shortcut code builds its in-app links with it.
+ */
+export function appSchemes(brand: Brand = BRAND): string[] {
+  return [...new Set([brand.appIds.scheme, UPSTREAM.appIds.scheme])];
+}
 
 const UPSTREAM_WORD = new RegExp(`\\b${UPSTREAM_NAME}\\b`, "g");
 
@@ -126,4 +148,71 @@ export function brandCatalog<T extends Record<string, unknown>>(
   return Object.fromEntries(
     Object.entries(catalog).map(([id, message]) => [id, brandCompiledMessage(message, brand)]),
   ) as T;
+}
+
+/** The parts of an Expo config a brand changes. Everything else passes through as written. */
+type MobileConfig = {
+  name?: string;
+  slug?: string;
+  owner?: string;
+  scheme?: string | string[];
+  android?: unknown;
+  extra?: { eas?: { projectId?: string } } & Record<string, unknown>;
+  updates?: { url?: string } & Record<string, unknown>;
+};
+
+/** The Expo account and project a brand's builds and over-the-air updates belong to. */
+export type MobileProject = { owner?: string; projectId?: string };
+
+/**
+ * `apps/mobile/app.json` as this brand ships it: its name, link schemes, app and extension
+ * identifiers, and the permission prompts that name the product. The file itself stays as
+ * upstream wrote it. The upstream Expo project is never carried over: a build of another brand
+ * that kept it would take upstream's over-the-air updates.
+ */
+export function brandMobileConfig<T extends MobileConfig>(
+  config: T,
+  project: MobileProject = {},
+  brand: Brand = BRAND,
+): T {
+  if (brand.name === UPSTREAM_NAME) return config;
+  const upstream = UPSTREAM.appIds;
+  const { android, ...rest } = config;
+  const result = {
+    ...(renamed(rest, upstream.ios, brand.appIds.ios, brand) as T),
+    ...(android === undefined
+      ? {}
+      : { android: renamed(android, upstream.android, brand.appIds.android, brand) }),
+    name: brand.name,
+    slug: brand.appIds.scheme,
+    scheme: appSchemes(brand),
+  };
+  // Never upstream's project: its identifier is dropped whether or not this brand has one yet.
+  const eas = { ...result.extra?.eas, projectId: project.projectId };
+  if (!project.projectId) delete eas.projectId;
+  result.extra = { ...result.extra, eas };
+  if (project.projectId) {
+    result.updates = { ...result.updates, url: `https://u.expo.dev/${project.projectId}` };
+  } else {
+    delete result.updates;
+  }
+  if (project.owner) result.owner = project.owner;
+  else delete result.owner;
+  return result;
+}
+
+/** Every string in `value`, with app identifiers swapped and product sentences renamed. */
+function renamed(value: unknown, from: string, to: string, brand: Brand): unknown {
+  if (typeof value === "string") {
+    const swapped = value.split(from).join(to);
+    // A sentence names the product; a path or identifier that happens to contain it does not.
+    return /\s/.test(swapped) ? brandText(swapped, brand) : swapped;
+  }
+  if (Array.isArray(value)) return value.map((item) => renamed(item, from, to, brand));
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, renamed(item, from, to, brand)]),
+    );
+  }
+  return value;
 }

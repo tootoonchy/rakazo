@@ -1,6 +1,7 @@
 import path from "node:path";
 import type { DesktopReachability, DesktopSetup } from "@rakazo/contracts";
 import { parseServerHeaders } from "@rakazo/contracts";
+import { BRAND, UPSTREAM_NAME } from "@rakazo/contracts/brand";
 import type { Session } from "electron";
 import { app, BrowserWindow, screen, shell } from "electron";
 import { desktop } from "../desktop-state.js";
@@ -10,6 +11,7 @@ import { dockerDownloadUrl, isDesktopSetupLink } from "../this-computer/docker-c
 import type { createAppOpener } from "../windows/app-opener.js";
 import { developmentIcon, markOnce } from "../windows/app-window.js";
 import { setupWindowOptions } from "../windows/window-options.js";
+import { setupBrandCss } from "./setup-brand-css.js";
 import { managedLocalOpenUrl, parseSetupInput, RAKAZO_CLOUD_URL } from "./setup-config.js";
 import { writeSetup } from "./setup-store.js";
 
@@ -35,6 +37,9 @@ function createSetupWindow() {
     // Closing setup without saving restores a connected session (Change Server cancel).
     restoreAppWindowAfterSetup();
   });
+  // Modified by Agental: a themed brand's colors and corners replace the page's own.
+  const brandCss = setupBrandCss();
+  if (brandCss) win.webContents.on("dom-ready", () => void win.webContents.insertCSS(brandCss));
   void win.loadFile(path.join(import.meta.dirname, "setup.html"));
   markOnce("rk:main:setup-window-created");
   return win;
@@ -131,6 +136,8 @@ export function registerSetupIpc({
     lang: desktopLocale(),
     dir: desktopDirection(),
     messages: desktopMessages(),
+    // Modified by Agental: the setup page swaps this in for the upstream name.
+    ...(BRAND.name === UPSTREAM_NAME ? {} : { name: BRAND.name }),
   }));
   handleIpc("desktop.setup.state", () => ({
     defaultLocalUrl: desktop.localStack.webUrl(),

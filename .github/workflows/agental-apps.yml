@@ -1,0 +1,149 @@
+# Modified by Agental: new file in the Agental white-label of Rakazo (Apache-2.0, see NOTICE).
+#
+# Builds the white-label's own apps. Upstream's release workflows stay as they are: they publish
+# upstream's apps from `main`, and this branch never runs them. Every job here is started by
+# hand and waits for approval in the `apps-release` environment, which also holds the signing
+# secrets. See docs/agental-apps-release.md for the accounts and settings each job needs.
+name: agental-apps
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: What to build
+        type: choice
+        required: true
+        options:
+          - android
+          - ios
+          - desktop-mac
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agental-apps-${{ inputs.target }}
+  cancel-in-progress: false
+
+jobs:
+  mobile:
+    name: Build the ${{ inputs.target }} app
+    if: github.ref == 'refs/heads/agental-whitelabel' && (inputs.target == 'android' || inputs.target == 'ios')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: apps-release
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EXPO_OWNER: ${{ vars.EXPO_OWNER }}
+      EAS_PROJECT_ID: ${{ vars.EAS_PROJECT_ID }}
+      EXPO_PUBLIC_API_URL: ${{ vars.APP_URL }}
+      EAS_BUILD_PROFILE: production
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Require the build settings
+        run: |
+          missing=()
+          for name in EXPO_TOKEN EXPO_OWNER EAS_PROJECT_ID EXPO_PUBLIC_API_URL; do
+            [[ -n "${!name}" ]] || missing+=("$name")
+          done
+          if (( ${#missing[@]} )); then
+            echo "Set these in the apps-release environment (docs/agental-apps-release.md): ${missing[*]}" >&2
+            exit 1
+          fi
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+      - run: pnpm install --frozen-lockfile
+      - name: Verify the mobile project
+        run: pnpm --filter @rakazo/mobile check
+      # The build service signs with the credentials stored in the Expo project and builds on its
+      # own machines; this step only starts the build and prints where to follow it.
+      - name: Start the build
+        working-directory: apps/mobile
+        env:
+          TARGET: ${{ inputs.target }}
+        run: pnpm exec eas build --platform "$TARGET" --profile production --non-interactive --no-wait
+
+  desktop-mac:
+    name: Build the signed macOS app
+    if: github.ref == 'refs/heads/agental-whitelabel' && inputs.target == 'desktop-mac'
+    runs-on: macos-15
+    timeout-minutes: 60
+    environment: apps-release
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Require signing and notarization credentials
+        env:
+          CSC_LINK: ${{ secrets.DESKTOP_MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.DESKTOP_MAC_CSC_KEY_PASSWORD }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY: ${{ runner.temp }}/apple-api-key.p8
+        run: |
+          set -euo pipefail
+          test -n "$CSC_LINK"
+          test -n "$CSC_KEY_PASSWORD"
+          test -n "$APPLE_API_KEY_ID"
+          test -n "$APPLE_API_ISSUER"
+          test -n "$APPLE_API_KEY_P8"
+          umask 077
+          printf '%s\n' "$APPLE_API_KEY_P8" > "$APPLE_API_KEY"
+          chmod 600 "$APPLE_API_KEY"
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+      - run: pnpm install --frozen-lockfile
+      - name: Generate the database client for desktop compilation
+        run: pnpm db:generate
+        env:
+          DATABASE_URL: postgres://rakazo:rakazo@127.0.0.1:5433/rakazo
+      - name: Build renderer and Electron main process
+        run: pnpm --filter @rakazo/web build && pnpm --filter @rakazo/desktop build
+        env:
+          RAKAZO_ALLOW_DEV_SECRETS: "1"
+          # The hosted app this build opens first; empty asks where to connect.
+          RAKAZO_CLOUD_URL: ${{ vars.APP_URL }}
+      - name: Name the app, its identifier and its update feed for the brand
+        run: pnpm exec tsx apps/desktop/scripts/brand-package.ts apps/desktop/package.json
+      # This job publishes no server archive, so the app is packaged without one to download:
+      # an empty descriptor leaves "This computer" on its Docker path instead of a download that
+      # would fail. A release that also publishes the archive writes the real descriptor here.
+      - name: Package without a downloadable server bundle
+        run: |
+          mkdir -p apps/desktop/build
+          echo '{}' > apps/desktop/build/server-bundle.json
+      - name: Package the signed and notarized universal app
+        env:
+          CSC_LINK: ${{ secrets.DESKTOP_MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.DESKTOP_MAC_CSC_KEY_PASSWORD }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ runner.temp }}/apple-api-key.p8
+        run: |
+          pnpm --filter @rakazo/desktop exec electron-builder \
+            --mac --universal --publish never -c.forceCodeSigning=true
+      - name: Remove the App Store Connect API key from the runner
+        if: always()
+        env:
+          APPLE_API_KEY: ${{ runner.temp }}/apple-api-key.p8
+        run: rm -f "$APPLE_API_KEY"
+      - name: Verify the signature and the notarization ticket
+        run: |
+          set -euo pipefail
+          app="$(find apps/desktop/out/mac-universal -maxdepth 1 -name '*.app' -print -quit)"
+          test -n "$app"
+          codesign --verify --deep --strict "$app"
+          xcrun stapler validate "$app"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: desktop-mac
+          path: apps/desktop/out/*.dmg
+          if-no-files-found: error
+          retention-days: 14

@@ -48,5 +48,6 @@ the change, so a conflict is easy to recognise.
 - The instructions bots are given still name the upstream product, so a bot asked what it runs on
   may say so.
 - Lifecycle emails take their wording from the deployment (`EMAIL_COPY_DIR`); none is supplied yet.
-- The desktop and mobile apps are not rebranded on this branch yet.
+- The desktop and mobile apps take the brand when they are built, and have not been built for a
+  store or signed yet: see [agental-apps-release.md](../agental-apps-release.md).
 - The icons are a plain placeholder mark until the brand's own artwork is supplied.

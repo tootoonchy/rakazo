@@ -6,7 +6,7 @@ import type {
   TransactionalEmailProvider,
 } from "@rakazo/adapter-kit";
 import { LAST_SIGN_IN_COOKIE, PartnerClickId, SignupAttribution } from "@rakazo/contracts";
-import { BRAND } from "@rakazo/contracts/brand";
+import { appSchemes, BRAND } from "@rakazo/contracts/brand";
 import {
   displayName,
   emailAllowed,
@@ -277,7 +277,7 @@ export function createAuth(prisma: PrismaClient, env: AuthEnv) {
         origins: [env.webOrigin, env.baseURL],
         extraOrigins: env.extraOrigins,
       }),
-      APP_SCHEME_ORIGIN,
+      ...APP_SCHEME_ORIGINS,
       ...socialTrustedOrigins(env.social, request),
     ],
     account: {
@@ -1083,13 +1083,14 @@ export function buildTrustedOrigins({
   requestOrigins = false,
 }: TrustedOriginsInput): string[] {
   const listed = requestOrigins
-    ? origins.filter((origin) => origin && origin !== APP_SCHEME_ORIGIN)
+    ? origins.filter((origin) => origin && !APP_SCHEME_ORIGINS.includes(origin))
     : origins;
   const variants = listed.flatMap(requestOrigins ? requestOriginVariants : loopbackTwinOrigins);
   return [...new Set([...listed, ...extraOrigins, ...variants])];
 }
 
-const APP_SCHEME_ORIGIN = "rakazo://";
+// Modified by Agental: the brand's own link scheme is trusted beside the upstream one.
+const APP_SCHEME_ORIGINS = appSchemes().map((scheme) => `${scheme}://`);
 
 function requestOriginVariants(origin: string): string[] {
   const variants = loopbackTwinOrigins(origin);
