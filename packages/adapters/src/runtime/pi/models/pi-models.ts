@@ -122,6 +122,20 @@ export function creditsCanPriceModel(entry: { provider: string; id: string }): b
   return pricedCatalogKeys.has(`${canonicalPiProviderId(entry.provider)}:${entry.id}`);
 }
 
+/** Each priced model's highest output rate, in dollars per million tokens. */
+const catalogOutputPrices = new Map<string, number>();
+
+/**
+ * Modified by Agental: what credits pay per million output tokens for this model, when they can
+ * price it: the approved offering's tariff, or else the registry's highest tier.
+ */
+export function creditsOutputPriceUsd(entry: { provider: string; id: string }): number | undefined {
+  if (modelCreditOfferings())
+    return approvedModelCreditOffering(entry.provider, entry.id)?.price.output;
+  listPiCatalog();
+  return catalogOutputPrices.get(`${canonicalPiProviderId(entry.provider)}:${entry.id}`);
+}
+
 const catalogProbeBaseUrls = new Map<string, string>();
 const catalogBaseUrls = new Map<string, Set<string>>();
 
@@ -251,6 +265,7 @@ function buildPiCatalog(): PiCatalogEntry[] {
   catalogBaseUrls.clear();
   hiddenCatalogKeys.clear();
   pricedCatalogKeys.clear();
+  catalogOutputPrices.clear();
   const models = registerOpenAiCompatibleCatalog(
     registerLocalProvider(applyPiModelCompatibility(builtinModels())),
   );
@@ -282,8 +297,13 @@ function buildPiCatalog(): PiCatalogEntry[] {
     const routingFields = definition?.routingFields ?? cloudflareRoutingFields(provider.id);
     for (const model of providerModels) {
       if (!catalogModelServesAgents(model)) hiddenCatalogKeys.add(`${provider.id}:${model.id}`);
-      if (maximumModelCallCost(model.cost, 0, 0) !== undefined)
+      if (maximumModelCallCost(model.cost, 0, 0) !== undefined) {
         pricedCatalogKeys.add(`${provider.id}:${model.id}`);
+        catalogOutputPrices.set(
+          `${provider.id}:${model.id}`,
+          Math.max(...[model.cost, ...(model.cost.tiers ?? [])].map((tier) => tier.output)),
+        );
+      }
       const thinkingLevels = getSupportedThinkingLevels(model) as ThinkingLevel[];
       entries.push({
         provider: provider.id,

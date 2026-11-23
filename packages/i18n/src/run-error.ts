@@ -42,6 +42,12 @@ export const translateRunError: RunErrorTranslator = (message, values) => {
         message: "Connect your own API key in Models or choose Rakazo credits in Billing.",
         values,
       });
+    case "This model is not included in your plan. Choose another model.":
+      return i18n._({
+        id: "This model is not included in your plan. Choose another model.",
+        message: "This model is not included in your plan. Choose another model.",
+        values,
+      });
     case "The model provider returned an error.":
       return i18n._({
         id: "The model provider returned an error.",

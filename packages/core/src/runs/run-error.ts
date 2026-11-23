@@ -56,6 +56,10 @@ export const MODEL_CREDIT_CAP_REACHED_ERROR = "Usage limit reached. Contact supp
 export const MODEL_CREDIT_DAILY_CAP_ERROR =
   "Daily usage limit reached. Work can continue tomorrow.";
 
+/** Modified by Agental: a premium model on credits, in an organization that has not opted in. */
+export const MODEL_PREMIUM_NOT_INCLUDED_ERROR =
+  "This model is not included in your plan. Choose another model.";
+
 /** A run in a billing organization without a paid plan, credits, or free period. */
 export const MODEL_ACCESS_REQUIRED_RUN_ERROR = "Subscribe in Billing to keep running bots.";
 
@@ -137,6 +141,7 @@ const APP_RUN_ERRORS = new Set([
   MODEL_ACCESS_REQUIRED_RUN_ERROR,
   MODEL_CREDIT_CAP_REACHED_ERROR,
   MODEL_CREDIT_DAILY_CAP_ERROR,
+  MODEL_PREMIUM_NOT_INCLUDED_ERROR,
   COMPUTER_RATE_LIMIT_ERROR,
   COMPUTER_PROVIDER_UNAVAILABLE_ERROR,
   COMPUTER_UNRESPONSIVE_ERROR,
@@ -325,7 +330,9 @@ export function normalizeRunError(
       ? { summary: details, details, kind: "output" }
       : MODEL_CONNECTION_RUN_ERRORS.has(trimmed)
         ? { summary: translate(trimmed), details, recovery: "connection" }
-        : { summary: details, details };
+        : trimmed === MODEL_PREMIUM_NOT_INCLUDED_ERROR
+          ? { summary: translate(trimmed), details, recovery: "model", kind: "model" }
+          : { summary: details, details };
   }
   if (trimmed === INTERNAL_RUN_ERROR) {
     return { summary: translate("Something went wrong. Try again."), details };
