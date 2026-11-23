@@ -2784,6 +2784,9 @@ model ModelCreditAccount {
   /// Modified by Agental: the most credits this organization's work may take in a UTC day.
   /// Null follows the deployment's default (DAILY_CREDIT_CAP_CENTS), which may be no cap.
   dailyCapMicros        BigInt?
+  /// Modified by Agental: whether these credits may pay for a premium model (one priced at or
+  /// above PREMIUM_MODEL_OUTPUT_USD). Off until the operator turns it on for this organization.
+  premiumModels         Boolean            @default(false)
   /// Numbers each provider read of purchases in the order it started.
   purchaseReadsStarted  BigInt             @default(0)
   /// The newest read that applied every purchase it saw; older reads are skipped.

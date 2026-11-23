@@ -1472,6 +1472,86 @@ describe("bot model change validation", () => {
     ).resolves.toEqual({ ok: true, provider: "xai", model: "saved-model", thinkingLevel: null });
   });
 
+  // Modified by Agental: premium models on credits need the paying organization's opt-in.
+  describe("premium models", () => {
+    function hostedDeps(premiumModels: boolean) {
+      const prisma = {
+        space: {
+          findFirst: async () => ({
+            organization: { modelCredits: { mode: "credits", balanceMicros: 1n } },
+          }),
+          findUnique: async () => ({ organizationId: "org-1" }),
+        },
+        member: { findUnique: async () => ({ role: "owner" }) },
+        modelCreditAccount: { findUnique: async () => ({ premiumModels }) },
+        userModelCredential: { findFirst: async () => null },
+      } as unknown as PrismaClient;
+      return { ...changeDeps({}), prisma, hostedProvider: "provider-a" };
+    }
+    const offer = () =>
+      vi.stubEnv(
+        "MODEL_CREDIT_OFFERINGS",
+        JSON.stringify({
+          defaultOfferingId: "approved",
+          offerings: [
+            {
+              id: "approved",
+              connectionId: "operator-connection",
+              provider: "provider-a",
+              modelId: "model-a",
+              price: { input: 3, output: 30, cacheRead: 0, cacheWrite: 3 },
+            },
+          ],
+        }),
+      );
+    const choose = (deps: ReturnType<typeof hostedDeps>) =>
+      validateBotModelChange(deps, { ...scope, provider: "provider-a", model: "model-a" });
+    const chosen = { ok: true, provider: "provider-a", model: "model-a", thinkingLevel: null };
+
+    it("refuses a premium model on credits until the organization has opted in", async () => {
+      try {
+        offer();
+        vi.stubEnv("PREMIUM_MODEL_OUTPUT_USD", "30");
+        await expect(choose(hostedDeps(false))).resolves.toEqual({
+          ok: false,
+          error: "This model is not included in your plan. Choose another model.",
+        });
+        await expect(choose(hostedDeps(true))).resolves.toEqual(chosen);
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    });
+
+    it("allows any priced model on credits below the threshold or without one", async () => {
+      try {
+        offer();
+        await expect(choose(hostedDeps(false))).resolves.toEqual(chosen);
+        vi.stubEnv("PREMIUM_MODEL_OUTPUT_USD", "30.5");
+        await expect(choose(hostedDeps(false))).resolves.toEqual(chosen);
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    });
+
+    it("never limits a model the member runs on their own connection", async () => {
+      try {
+        // A threshold every priced model reaches.
+        vi.stubEnv("PREMIUM_MODEL_OUTPUT_USD", "0.000001");
+        const deps = changeDeps({ xai: credential("xai", "saved-model") });
+        await expect(
+          validateBotModelChange(deps, { ...scope, provider: "xai", model: "saved-model" }),
+        ).resolves.toEqual({
+          ok: true,
+          provider: "xai",
+          model: "saved-model",
+          thinkingLevel: null,
+        });
+      } finally {
+        vi.unstubAllEnvs();
+      }
+    });
+  });
+
   it("rejects a provider the deployment allowlist leaves out", async () => {
     const savedAllowlist = process.env.RAKAZO_MODEL_PROVIDER_ALLOWLIST;
     process.env.RAKAZO_MODEL_PROVIDER_ALLOWLIST = "openrouter";

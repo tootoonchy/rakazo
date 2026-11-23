@@ -122,6 +122,7 @@ export * from "./messaging/team-chat/team-chat-judge.js";
 export { renderTeamChatEngagementPrompt } from "./messaging/team-chat/team-chat-judge.prompt.js";
 export * from "./messaging/team-chat/team-chat-messaging.js";
 export { approvedModelCreditOffering, modelCreditOfferings } from "./model-credits/offerings.js";
+export { isPremiumModelPrice, premiumModelOutputUsd } from "./model-credits/premium-models.js";
 export {
   approvedModelCreditCatalogEntry,
   approvedModelCreditSeesImages,

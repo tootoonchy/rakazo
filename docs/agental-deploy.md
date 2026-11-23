@@ -62,8 +62,8 @@ safe to repeat. Without the secret the routes do not exist.
 | `POST /api/v1/service/sign-in-links` | `{ space_id, email }` for a member of the Space. Answers a link that signs that person in and opens the Space. It works once and for one minute. |
 | `POST /api/v1/service/tickets` | `{ space_id, external_id, title, description?, assignee? }`. Puts a ticket on the board for a bot (`operator`, `leads` or `content`), which is woken as for any ticket. |
 | `GET /api/v1/service/tickets` | `?space_id=&external_id=`: where the ticket stands. |
-| `GET /api/v1/service/credits` | `?space_id=`: `{ space_id, has_account, balance_usd, daily_cap_usd, daily_cap_own, used_today_usd }`. The credits the Space has left, the daily cap in force (`null` for none, `daily_cap_own` when it is the Space's own) and what today has taken. |
-| `POST /api/v1/service/credits` | `{ space_id, daily_cap_cents }`: sets the Space's own daily cap in whole cents; `null` returns it to the default. Answers as the `GET` does. |
+| `GET /api/v1/service/credits` | `?space_id=`: `{ space_id, has_account, balance_usd, daily_cap_usd, daily_cap_own, used_today_usd, premium_models, premium_model_output_usd }`. The credits the Space has left, the daily cap in force (`null` for none, `daily_cap_own` when it is the Space's own), what today has taken, whether its credits may pay for premium models, and the output price per million tokens from which a model is premium (`null` when none is). |
+| `POST /api/v1/service/credits` | `{ space_id, daily_cap_cents?, premium_models? }`, at least one of the two: `daily_cap_cents` sets the Space's own daily cap in whole cents (`null` returns it to the default), `premium_models` turns premium models on or off for it. A setting left out is not changed. Answers as the `GET` does. |
 | `POST /api/v1/service/memory` | `{ space_id, path, content }`: a note every bot in the Space can read, for decisions made in the hub. |
 
 ## Ticket changes

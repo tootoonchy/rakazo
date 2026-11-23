@@ -22,6 +22,7 @@ import {
   MODEL_IMAGE_INPUT_ERROR,
   MODEL_OUTPUT_CUT_ERROR,
   MODEL_OUTPUT_LIMIT_ERROR,
+  MODEL_PREMIUM_NOT_INCLUDED_ERROR,
   MODEL_REQUEST_LIMIT_ERROR,
   MODEL_REQUIRED_SEND_ERROR,
   MODEL_UNPRICED_FOR_CREDITS_ERROR,
@@ -516,6 +517,15 @@ describe("normalizeRunError", () => {
         summary: MODEL_CREDITS_EXHAUSTED_ERROR,
         details: MODEL_CREDITS_EXHAUSTED_ERROR,
         recovery: "connection",
+      });
+    });
+
+    it("sends a premium model the plan leaves out to the model choice", () => {
+      expect(normalizeRunError(MODEL_PREMIUM_NOT_INCLUDED_ERROR)).toEqual({
+        summary: MODEL_PREMIUM_NOT_INCLUDED_ERROR,
+        details: MODEL_PREMIUM_NOT_INCLUDED_ERROR,
+        recovery: "model",
+        kind: "model",
       });
     });
 

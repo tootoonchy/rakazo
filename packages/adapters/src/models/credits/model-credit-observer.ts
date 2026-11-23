@@ -1,14 +1,20 @@
 import type { ModelCallObserver } from "@rakazo/adapter-kit";
-import { HOSTED_MODEL_CREDITS_REQUIRED_ERROR } from "@rakazo/core";
+import {
+  HOSTED_MODEL_CREDITS_REQUIRED_ERROR,
+  MODEL_PREMIUM_NOT_INCLUDED_ERROR,
+} from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import {
   creditAccount,
   organizationForMember,
+  premiumModelsAllowed,
   recordModelCreditReceipt,
   reserveModelCredits,
 } from "@rakazo/db";
 
 import { modelCreditOfferings, offeringUsage } from "../../model-credits/offerings.js";
+import { isPremiumModelPrice } from "../../model-credits/premium-models.js";
+import { creditsOutputPriceUsd } from "../../runtime/pi/models/pi-models.js";
 import { maximumModelCallCost } from "../../runtime/pi/usage/pi-usage.js";
 
 export class HostedModelCreditsRequiredError extends Error {
@@ -47,6 +53,16 @@ export async function hostedModelCreditObserver(
         throw new HostedModelCreditsRequiredError("This model requires a personal connection");
       if (offering && call.maxOutputTokens === null && offering.price.output > 0)
         throw new HostedModelCreditsRequiredError("This protocol requires a zero output tariff");
+      // Modified by Agental: a premium model runs on credits only where the operator allowed
+      // it. Read for each such call, so turning it off stops the next call, not the next run.
+      const outputPrice = offering
+        ? offering.price.output
+        : creditsOutputPriceUsd({ provider: call.provider, id: call.modelId });
+      if (
+        isPremiumModelPrice(outputPrice) &&
+        !(await premiumModelsAllowed(prisma, membership.organizationId))
+      )
+        throw new Error(MODEL_PREMIUM_NOT_INCLUDED_ERROR);
       const maximum = offering
         ? maximumModelCallCost(
             offering.price,

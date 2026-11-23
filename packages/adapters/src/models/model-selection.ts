@@ -7,7 +7,7 @@ import {
   selectCompatibleModelCredential,
   usableModelId,
 } from "@rakazo/contracts";
-import { MODEL_UNPRICED_FOR_CREDITS_ERROR } from "@rakazo/core";
+import { MODEL_PREMIUM_NOT_INCLUDED_ERROR, MODEL_UNPRICED_FOR_CREDITS_ERROR } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import {
   chooseModelCredential,
@@ -16,8 +16,10 @@ import {
   GUEST_ROLE,
   modelCredentialProviderFilter,
   organizationForMember,
+  premiumModelsAllowed,
 } from "@rakazo/db";
 import { approvedModelCreditOffering, modelCreditOfferings } from "../model-credits/offerings.js";
+import { isPremiumModelPrice } from "../model-credits/premium-models.js";
 import { availableModelCreditOfferings } from "../model-credits/routing.js";
 import type { ModelCredentialAuthKind } from "../runtime/pi/models/pi-catalog-availability.js";
 import {
@@ -40,6 +42,7 @@ import {
 import type { PiCatalogEntry } from "../runtime/pi/models/pi-models.js";
 import {
   creditsCanPriceModel,
+  creditsOutputPriceUsd,
   listPiCatalog,
   offeredCatalog,
   scriptedCatalogEntry,
@@ -830,6 +833,13 @@ export async function validateBotModelChange(
       ) {
         if (!creditsCanPriceModel({ provider, id: model }))
           return { ok: false, error: MODEL_UNPRICED_FOR_CREDITS_ERROR };
+        // Modified by Agental: credits pay for a premium model only where the operator allowed
+        // it, for the organization that pays (a guest's own, as when the call is made).
+        if (isPremiumModelPrice(creditsOutputPriceUsd({ provider, id: model }))) {
+          const payer = await organizationForMember(deps.prisma, scope);
+          if (!payer || !(await premiumModelsAllowed(deps.prisma, payer.organizationId)))
+            return { ok: false, error: MODEL_PREMIUM_NOT_INCLUDED_ERROR };
+        }
         const allowed = listPiCatalog().find(
           (entry) => entry.provider === provider && entry.id === model,
         )?.thinkingLevels;
