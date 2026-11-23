@@ -471,9 +471,9 @@ export async function sleepComputerIfIdle(
   // A status read that never answers counts as not seen rather than holding up the check.
   const statusSignal = AbortSignal.timeout(STATUS_CHECK_TIMEOUT_MS);
   const status = deps.sandbox.isRunning?.(ref, { ...ctx, signal: statusSignal });
-  if (status && (await withAbort(status, statusSignal).catch(() => false))) {
-    await recordComputerRunSeen(deps.prisma, computer);
-  }
+  const running = status ? await withAbort(status, statusSignal).catch(() => false) : undefined;
+  const checkedAt = new Date();
+  if (running) await recordComputerRunSeen(deps.prisma, computer, checkedAt);
   // Past the lifetime limit only a run executing right now, or a coding agent CLI still writing
   // its session, holds the computer up. Waiting runs and other background work start it again
   // when they next need it. Otherwise a run waiting for takeover holds an unbilled computer for
@@ -482,7 +482,10 @@ export async function sleepComputerIfIdle(
   // stopping the computer then ends the control and any recording under it.
   const activeControl = hasActiveComputerControl(computer);
   // Modified by Agental: where time is taken from credits, it is taken here, and credits can run out.
-  const usedUp = await computerTimeUsedUp(deps, computer);
+  // A computer the provider did not just confirm as running may already be stopped: its run is
+  // then closed at the moment it was last seen, so no time is taken past that here. The time up
+  // to its end is taken when the run closes.
+  const usedUp = await computerTimeUsedUp(deps, computer, running === false ? null : checkedAt);
   const allowanceUsed = usedUp !== null;
   const limitReached =
     allowanceUsed || activeLimitReached(deps.sandbox, ref, computer.runningSince);

@@ -56,21 +56,24 @@ export async function startComputerRun(
 /**
  * Why a computer may not start, or keep running: its organization spent this period's allowance,
  * or, where computer time is taken from credits, has none left (or reached the day's cap). Null
- * when it may. A running computer's time so far is taken first, so what is left is really left.
+ * when it may. A running computer's time up to `takeThrough` is taken first, so what is left is
+ * really left; null takes none, for a computer that was not just seen running.
  */
 export async function computerTimeUsedUp(
   deps: Deps,
   computer: { id?: string; spaceId: string; kind: string; runningSince?: Date | null },
+  takeThrough: Date | null = new Date(),
 ): Promise<string | null> {
   const credited = await creditedComputer(deps, computer);
   if (!credited)
     return (await sandboxAllowanceUsedUp(deps, computer)) ? COMPUTER_ALLOWANCE_USED_ERROR : null;
   const charge =
-    computer.id && computer.runningSince
+    computer.id && computer.runningSince && takeThrough
       ? await chargeOpenComputerRun(
           deps.prisma,
           { id: computer.id, runningSince: computer.runningSince },
           (run) => sandboxHourlyCostMicros(deps.sandbox, run),
+          takeThrough,
         )
       : "nothing";
   const refusal = await computerCreditsRefusal(deps.prisma, credited.organizationId);

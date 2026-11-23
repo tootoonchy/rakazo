@@ -462,6 +462,41 @@ describePostgres("computer runs (PostgreSQL)", () => {
     expect((refused as Error).message).toBe(MODEL_CREDITS_EXHAUSTED_ERROR);
   });
 
+  it("takes no credits for time after the provider stopped the computer", async () => {
+    vi.stubEnv("COMPUTER_USAGE_BILLING", "credits");
+    vi.stubEnv("COST_MARKUP", "2");
+    const o = await owner();
+    Object.assign(o.sandbox, { billsWhileRunning: () => true });
+    await creditAccount(system, o.id);
+    await system.modelCreditAccount.update({
+      where: { organizationId: o.id },
+      data: { mode: "credits" },
+    });
+    await reconcileCreditPurchase(system, o.id, { id: `${o.id}-paid`, amountCents: 500 });
+    await o.start();
+    // Started four hours ago and last seen running three hours ago: one hour was really used.
+    const lastSeenAt = new Date(Date.now() - 3 * 3_600_000);
+    const startedAt = new Date(lastSeenAt.getTime() - 3_600_000);
+    await system.computer.update({ where: { id: o.id }, data: { runningSince: startedAt } });
+    await system.computerRun.updateMany({
+      where: { computerId: o.id },
+      data: { startedAt, lastSeenAt },
+    });
+    o.sandbox.isRunning = async () => false;
+    o.sandbox.exportWorkspace = async function* () {
+      yield* [];
+      throw Object.assign(new Error("sandbox removed"), { name: "SandboxNotFoundError" });
+    };
+
+    await o.sleep();
+
+    const [run] = await o.runs();
+    expect(run).toMatchObject({ endReason: "gone", endedAt: lastSeenAt });
+    expect(run!.creditedThroughAt).toEqual(lastSeenAt);
+    // One hour at $0.20, twice over: $0.40 of the $5.00, not the four hours since the start.
+    expect(Number((await creditAccount(system, o.id)).balanceMicros) / 1e6).toBeCloseTo(4.6, 2);
+  });
+
   it("does not record host computers, whose stop only Electron sees", async () => {
     const o = await owner();
 

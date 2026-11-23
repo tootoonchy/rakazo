@@ -90,12 +90,13 @@ export async function recordComputerRunStart(
 export async function recordComputerRunSeen(
   prisma: RunsClient,
   computer: { id: string; runningSince?: Date | null },
+  seenAt = new Date(),
 ): Promise<void> {
   if (!computer.runningSince) return;
   try {
     await prisma.computerRun.updateMany({
       where: { computerId: computer.id, startedAt: computer.runningSince, endedAt: null },
-      data: { lastSeenAt: new Date() },
+      data: { lastSeenAt: seenAt },
     });
   } catch (error) {
     getLogger().error("computer.run_record_failed", error, {
