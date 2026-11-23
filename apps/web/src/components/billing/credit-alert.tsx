@@ -94,7 +94,7 @@ function CreditAlert({
               onAddCredits();
             }}
           >
-            <Trans>Add credits</Trans>
+            {level === 100 ? <Trans>Top up to continue</Trans> : <Trans>Add credits</Trans>}
           </Button>
         ) : null}
       </div>

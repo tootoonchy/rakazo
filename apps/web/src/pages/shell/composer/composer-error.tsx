@@ -1,7 +1,11 @@
 import { i18n } from "@lingui/core";
 import { useLingui } from "@lingui/react/macro";
 import { computerHoursOut } from "@rakazo/contracts";
-import { isModelRequiredSendError, normalizeRunError } from "@rakazo/core";
+import {
+  isModelRequiredSendError,
+  MODEL_CREDITS_EXHAUSTED_ERROR,
+  normalizeRunError,
+} from "@rakazo/core";
 import { translateRunError } from "@rakazo/i18n/run-error";
 import { Button } from "@rakazo/ui-web";
 import { FileIcon, X } from "lucide-react";
@@ -130,8 +134,15 @@ export function ComposerError({
         : hoursOut === "plan"
           ? t`This month's computer hours are used up.`
           : null;
-  const recoveryAction =
-    recovery === "model"
+  // Modified by Agental: out of credits, an owner who can buy more is sent to buy them.
+  const topUp =
+    !sendError &&
+    runError?.trim() === MODEL_CREDITS_EXHAUSTED_ERROR &&
+    billing?.canManage &&
+    billing.creditPurchasesEnabled;
+  const recoveryAction = topUp
+    ? { label: t`Top up to continue`, onClick: onOpenBilling }
+    : recovery === "model"
       ? { label: t`Choose a model`, onClick: onOpenModels }
       : recovery === "connection"
         ? {

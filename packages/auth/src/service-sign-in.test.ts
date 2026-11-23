@@ -18,6 +18,14 @@ describe("service sign-in pass", () => {
     });
   });
 
+  it("carries a settings screen to open, and drops one it does not know", () => {
+    const token = createServiceSignInToken(secret, "user_1", "space_1", at, "billing");
+    expect(readServiceSignInToken(secret, token, at)).toMatchObject({ open: "billing" });
+    // Signed by the same secret but naming a screen this server does not offer.
+    const unknown = createServiceSignInToken(secret, "user_1", "space_1", at, "admin" as "billing");
+    expect(readServiceSignInToken(secret, unknown, at)).not.toHaveProperty("open");
+  });
+
   it("is refused once it has expired", () => {
     const token = createServiceSignInToken(secret, "user_1", undefined, at);
     const late = new Date(at.getTime() + (SERVICE_SIGN_IN_TTL_SECONDS + 1) * 1000);

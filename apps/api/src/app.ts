@@ -876,7 +876,12 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
   if (meetingCalendar) mountMeetingCalendarHttp(app, meetingCalendar, sessionActor);
   mountWebhookHttpRoutes(app, { prisma, secrets, events, jobs });
   // Modified by Agental: provisioning, sign-in links, tickets and notes for the project hub.
-  mountService(app, env, routerContext, { prisma, ticketChanges, memory });
+  mountService(app, env, routerContext, {
+    prisma,
+    ticketChanges,
+    memory,
+    topUps: Boolean(billingProvider?.createCreditCheckout) && resolveDeploymentModel().configured,
+  });
   if (env.inboundEmail) {
     mountEmailInboundRoute(app, {
       prisma,

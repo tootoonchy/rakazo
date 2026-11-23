@@ -9,8 +9,15 @@ export const SERVICE_SIGN_IN_TTL_SECONDS = 60;
 export const SERVICE_SIGN_IN_PATH = "/service-sign-in";
 const PREFIX = "ssl1";
 
-/** `space` names the Space the person should land in, when the link is for one. */
-type Claim = { sub: string; jti: string; exp: number; space?: string };
+/** The settings screens a link may open on arrival. */
+export const SERVICE_SIGN_IN_SCREENS = ["billing"] as const;
+export type ServiceSignInScreen = (typeof SERVICE_SIGN_IN_SCREENS)[number];
+
+/**
+ * `space` names the Space the person should land in, when the link is for one, and `open` a
+ * settings screen to show there.
+ */
+type Claim = { sub: string; jti: string; exp: number; space?: string; open?: ServiceSignInScreen };
 
 const base64url = (text: string) => Buffer.from(text, "utf8").toString("base64url");
 const sign = (secret: string, payload: string) =>
@@ -26,10 +33,12 @@ export function createServiceSignInToken(
   userId: string,
   spaceId?: string,
   now: Date = new Date(),
+  open?: ServiceSignInScreen,
 ): string {
   const claim: Claim = {
     sub: userId,
     ...(spaceId ? { space: spaceId } : {}),
+    ...(open ? { open } : {}),
     jti: randomUUID(),
     exp: Math.floor(now.getTime() / 1000) + SERVICE_SIGN_IN_TTL_SECONDS,
   };
@@ -53,11 +62,12 @@ export function readServiceSignInToken(
   } catch {
     return null;
   }
-  const { sub, jti, exp, space } = claim;
+  const { sub, jti, exp, space, open } = claim;
   if (typeof sub !== "string" || !sub || typeof jti !== "string" || !jti) return null;
   if (typeof exp !== "number" || exp * 1000 < now.getTime()) return null;
   const landsIn = typeof space === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(space);
-  return { sub, jti, exp, ...(landsIn ? { space } : {}) };
+  const opens = SERVICE_SIGN_IN_SCREENS.find((screen) => screen === open);
+  return { sub, jti, exp, ...(landsIn ? { space } : {}), ...(opens ? { open: opens } : {}) };
 }
 
 /**
@@ -90,10 +100,13 @@ export function serviceSignIn(options: { secret: string; appUrl: string }): Bett
         const session = await ctx.context.internalAdapter.createSession(user.id);
         if (!session) throw new APIError("INTERNAL_SERVER_ERROR");
         await setSessionCookie(ctx, { session, user });
-        // The app picks the Space up from the address and opens it (see adoptSpaceFromUrl).
-        throw ctx.redirect(
-          claim.space ? `${options.appUrl}/?space=${claim.space}` : options.appUrl,
-        );
+        // The app picks the Space up from the address and opens it (see adoptSpaceFromUrl), and
+        // shows the settings screen the address names.
+        const landing = new URLSearchParams({
+          ...(claim.space ? { space: claim.space } : {}),
+          ...(claim.open ? { settings: claim.open } : {}),
+        }).toString();
+        throw ctx.redirect(landing ? `${options.appUrl}/?${landing}` : options.appUrl);
       }),
     },
   };

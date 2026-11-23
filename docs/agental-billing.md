@@ -21,6 +21,11 @@ three things more. This page says which are built, how they are set, and what is
   against that plus what is left. Adding credits starts the count again. An owner is offered
   the billing settings from the alert. The service API reports the same level as `alert_level`
   on `GET /api/v1/service/credits`. No email is sent.
+- **Top up to continue.** When a run stops for want of credits, an owner who can buy them is
+  offered "Top up to continue", which opens the billing settings where credits are added. The
+  alert at nothing left offers the same. Anyone else keeps the upstream action (connect a model).
+  The hub can send an owner straight there: a sign-in link with `open: "billing"`, offered only
+  while `top_up_available` is true.
 - **Real cost stays recorded.** `usage_records.costUsd` is still what the provider charged (for
   the hosted model provider, the cost it reports per generation). What was taken is in
   `model_credit_entries`. The two can be compared per organization.

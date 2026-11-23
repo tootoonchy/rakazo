@@ -58,10 +58,10 @@ safe to repeat. Without the secret the routes do not exist.
 | Call | Does |
 |---|---|
 | `POST /api/v1/service/spaces` | `{ external_project_id, project_type, email, name?, project_name, plan? }`. Makes the organization and Space, the Operator, Leads and Content bots (asking before they act), the board, and the project type's starter routines, paused. Answers `{ space_id, user_id, created, bots, sign_in_url }`. |
-| `POST /api/v1/service/sign-in-links` | `{ space_id, email }` for a member of the Space. Answers a link that signs that person in and opens the Space. It works once and for one minute. |
+| `POST /api/v1/service/sign-in-links` | `{ space_id, email, open? }` for a member of the Space. Answers a link that signs that person in and opens the Space. It works once and for one minute. `open: "billing"` lands on the billing settings, where an owner buys credits. |
 | `POST /api/v1/service/tickets` | `{ space_id, external_id, title, description?, assignee? }`. Puts a ticket on the board for a bot (`operator`, `leads` or `content`), which is woken as for any ticket. |
 | `GET /api/v1/service/tickets` | `?space_id=&external_id=`: where the ticket stands. |
-| `GET /api/v1/service/credits` | `?space_id=`: `{ space_id, has_account, balance_usd, used_usd, alert_level, daily_cap_usd, daily_cap_own, used_today_usd }`. The credits the Space has left, what work has taken since credits were last added, the alert level that reaches (`50`, `80`, `100` for nothing left, or `null`), the daily cap in force (`null` for none, `daily_cap_own` when it is the Space's own) and what today has taken. |
+| `GET /api/v1/service/credits` | `?space_id=`: `{ space_id, has_account, balance_usd, used_usd, alert_level, top_up_available, daily_cap_usd, daily_cap_own, used_today_usd }`. `top_up_available` is true once an owner can buy credits in the app (payments are set up). The credits the Space has left, what work has taken since credits were last added, the alert level that reaches (`50`, `80`, `100` for nothing left, or `null`), the daily cap in force (`null` for none, `daily_cap_own` when it is the Space's own) and what today has taken. |
 | `POST /api/v1/service/credits` | `{ space_id, daily_cap_cents }`: sets the Space's own daily cap in whole cents; `null` returns it to the default. Answers as the `GET` does. |
 | `POST /api/v1/service/memory` | `{ space_id, path, content }`: a note every bot in the Space can read, for decisions made in the hub. |
 
