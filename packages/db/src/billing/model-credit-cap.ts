@@ -112,6 +112,22 @@ export async function dailyCreditCapStatus(
   };
 }
 
+/**
+ * Modified by Agental: what an organization's work has taken (holds included) since credits were
+ * last added to it. With the balance, this is how far through its current credits it is.
+ */
+export async function creditsUsedSinceAdded(prisma: PrismaClient, organizationId: string) {
+  const [row] = await prisma.$queryRaw<{ micros: bigint }[]>`
+    SELECT COALESCE(-SUM("amountMicros"), 0)::bigint AS micros
+    FROM model_credit_entries
+    WHERE "organizationId"=${organizationId} AND "callId" IS NOT NULL
+      AND "createdAt" >= COALESCE(
+        (SELECT MAX("createdAt") FROM model_credit_entries
+          WHERE "organizationId"=${organizationId} AND "callId" IS NULL AND "amountMicros" > 0),
+        '-infinity'::timestamp)`;
+  return row!.micros > 0n ? row!.micros : 0n;
+}
+
 /** Operator-only control; no user-facing mutation exposes this setting. Null removes the cap. */
 export async function setModelCreditCap(
   prisma: PrismaClient,

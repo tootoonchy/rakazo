@@ -5,11 +5,12 @@ import type { TicketChangeNotifier } from "@rakazo/adapters";
 import { createTicket } from "@rakazo/adapters";
 import { createServiceSignInToken, SERVICE_SIGN_IN_PATH } from "@rakazo/auth";
 import type { Actor, Bot, McpServerConfigInput as McpServerConfig } from "@rakazo/contracts";
-import { CreateRoutineInput, McpServerConfigInput } from "@rakazo/contracts";
+import { CreateRoutineInput, creditAlertLevel, McpServerConfigInput } from "@rakazo/contracts";
 import { hasValidBearerToken } from "@rakazo/core/node/secrets-guard";
 import type { Prisma, PrismaClient } from "@rakazo/db";
 import {
   createOrganizationWithDefaultSpace,
+  creditsUsedSinceAdded,
   dailyCreditCapMicros,
   dailyCreditCapStatus,
   ensureBoard,
@@ -414,10 +415,16 @@ async function creditsLeft(prisma: PrismaClient, spaceId: string) {
     select: { balanceMicros: true },
   });
   const daily = await dailyCreditCapStatus(prisma, space.organizationId, dailyCreditCapMicros());
+  const balanceUsd = usd(account?.balanceMicros ?? 0n);
+  const usedUsd = usd(await creditsUsedSinceAdded(prisma, space.organizationId));
   return {
     space_id: spaceId,
     has_account: Boolean(account),
-    balance_usd: usd(account?.balanceMicros ?? 0n),
+    balance_usd: balanceUsd,
+    // What work has taken since credits were last added, and the alert level that reaches:
+    // 50, 80 or 100 (nothing left), or null below the first.
+    used_usd: usedUsd,
+    alert_level: account ? creditAlertLevel(balanceUsd, usedUsd) : null,
     // Null means no daily cap. `daily_cap_own` tells the Space's own cap from the default.
     daily_cap_usd: daily.capMicros === null ? null : usd(daily.capMicros),
     daily_cap_own: daily.own,

@@ -6,7 +6,11 @@ import { createDb } from "../database/client.js";
 import { JsonColumnMismatchError } from "../database/json-column.js";
 import { asSystem } from "../database/row-security.js";
 import { dailyCreditCapMicros } from "./cost-markup.js";
-import { dailyCreditCapStatus, setDailyCreditCap } from "./model-credit-cap.js";
+import {
+  creditsUsedSinceAdded,
+  dailyCreditCapStatus,
+  setDailyCreditCap,
+} from "./model-credit-cap.js";
 import {
   creditAccount,
   expireModelCredits,
@@ -124,6 +128,29 @@ dbTests("model credits ledger", () => {
     await setDailyCreditCap(operator, organizationId, null);
     await expect(reserveModelCredits(prisma, organizationId, 0.01)).rejects.toThrow("Daily");
     await expect(setDailyCreditCap(operator, organizationId, 0n)).rejects.toThrow("Daily cap");
+  });
+  it("counts what work took since credits were last added, and starts over at the next addition", async () => {
+    const operator = asSystem(prisma);
+    expect(await creditsUsedSinceAdded(operator, organizationId)).toBe(0n);
+    await reconcileCreditPurchase(prisma, organizationId, {
+      id: `${organizationId}-first`,
+      amountCents: 1000,
+    });
+    const call = await reserveModelCredits(prisma, organizationId, 3);
+    await prisma.$transaction((tx) => settleModelCreditsTx(tx, call, 2));
+    // An open hold counts in full, as it does against the balance.
+    await reserveModelCredits(prisma, organizationId, 1);
+    expect(await creditsUsedSinceAdded(operator, organizationId)).toBe(3_000_000n);
+    // The addition must be later than the work, and both land within one clock tick here.
+    await prisma.modelCreditEntry.updateMany({
+      where: { organizationId, callId: { not: null } },
+      data: { createdAt: new Date(Date.now() - 60_000) },
+    });
+    await reconcileCreditPurchase(prisma, organizationId, {
+      id: `${organizationId}-second`,
+      amountCents: 1000,
+    });
+    expect(await creditsUsedSinceAdded(operator, organizationId)).toBe(0n);
   });
   it("holds disputed credits, returns them when the dispute is won, and never past a refund", async () => {
     const id = `${organizationId}-dispute`;

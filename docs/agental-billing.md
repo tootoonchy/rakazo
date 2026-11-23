@@ -16,6 +16,11 @@ three things more. This page says which are built, how they are set, and what is
   sets it for one Space's organization; `null` returns it to `DAILY_CREDIT_CAP_CENTS`. The change
   is written to the billing audit journal. `GET` on the same path shows the cap in force and what
   the day has taken so far.
+- **Usage alerts, in the app only.** A member is told once when their organization has used
+  50%, 80% and all of its credits: what work took since credits were last added, measured
+  against that plus what is left. Adding credits starts the count again. An owner is offered
+  the billing settings from the alert. The service API reports the same level as `alert_level`
+  on `GET /api/v1/service/credits`. No email is sent.
 - **Real cost stays recorded.** `usage_records.costUsd` is still what the provider charged (for
   the hosted model provider, the cost it reports per generation). What was taken is in
   `model_credit_entries`. The two can be compared per organization.

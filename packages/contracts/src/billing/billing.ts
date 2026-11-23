@@ -135,6 +135,11 @@ export type BillingCancellationReason = (typeof BILLING_CANCELLATION_REASONS)[nu
 export const BillingStatusSchema = z.object({
   funding: z.enum(["byok", "credits"]).nullable().optional(),
   balanceUsd: z.number().optional(),
+  /**
+   * Modified by Agental: dollars of credits taken for work since credits were last added.
+   * Absent from older servers.
+   */
+  creditsUsedUsd: z.number().nonnegative().optional(),
   monthlyAmountCents: z.number().int().positive().nullable().optional(),
   creditPurchasesEnabled: z.boolean().optional(),
   /** Monthly price of the own-key plan, as subscribed when the organization has it; `null` when free. */
@@ -212,6 +217,22 @@ export function modelCreditsUsd(status: BillingStatus | null | undefined): numbe
   if (!status) return null;
   const balance = status.balanceUsd ?? 0;
   return status.funding === "credits" || balance > 0 ? balance : null;
+}
+
+/** Modified by Agental: the shares of its credits an organization is told it has used. */
+export type CreditAlertLevel = 50 | 80 | 100;
+
+/**
+ * The highest alert level reached, or null below the first one and for a member who is not on
+ * credits (`leftUsd` null, as `modelCreditsUsd` gives it). The credits being measured are what
+ * was used since credits were last added plus what is left, so all of them are used exactly
+ * when nothing is left.
+ */
+export function creditAlertLevel(leftUsd: number | null, usedUsd: number): CreditAlertLevel | null {
+  if (leftUsd === null || usedUsd <= 0) return null;
+  if (leftUsd <= 0) return 100;
+  const percent = (usedUsd / (usedUsd + leftUsd)) * 100;
+  return percent >= 80 ? 80 : percent >= 50 ? 50 : null;
 }
 
 /** A subscription that stopped for want of a payment: it resumes from the billing portal. */
