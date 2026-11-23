@@ -1,5 +1,6 @@
 import type { AgentRunRequest } from "@rakazo/adapter-kit";
 import { modelRoleConnectionId } from "@rakazo/contracts";
+import { BRAND } from "@rakazo/contracts/brand";
 import { BACKGROUND_HELPER_TRIGGER, redactSecrets } from "@rakazo/core";
 import { isDatabaseUnavailable, recordUsage } from "@rakazo/db";
 import { getLogger } from "@rakazo/logging";
@@ -7,6 +8,7 @@ import { isStrategicInitiativeRun } from "../../routines/strategic-initiative.js
 import { personSpeaker } from "../../runtime/context/history-speakers.js";
 import { backgroundHelpersAllowed } from "../../tasks/background-helpers.js";
 import { builtinAgentTools } from "../../tools/builtin.tool-definition.js";
+import { projectContextLayer } from "../assembly/project-context.prompt.js";
 import { promptVersion } from "../assembly/prompt-version.js";
 import type { AssembledTurn } from "../assembly/run-assembly.js";
 import {
@@ -208,6 +210,8 @@ function modelTurnRequest(
               delete: emailInbox && !disabledBuiltinTools.has("delete_email"),
             })
           : "",
+        // Modified by Agental: the project the Space belongs to, as a block of its own.
+        projectContextLayer(BRAND.name, turn.projectContext),
       ]
         .filter(Boolean)
         .join("\n"),
