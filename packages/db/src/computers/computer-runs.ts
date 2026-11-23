@@ -1,5 +1,6 @@
 import { getLogger } from "@rakazo/logging";
-import type { PrismaClient } from "../generated/prisma/client.js";
+import { chargeEndedComputerRuns } from "../billing/computer-credits.js";
+import type { PrismaClient } from "../database/client.js";
 
 /**
  * How a computer run ended.
@@ -42,6 +43,8 @@ export async function recordComputerRunStart(
     providerRef: string | null;
     runningSize?: string | null;
     runningSizeSince?: Date | null;
+    /** Modified by Agental: set when the run's time is taken from credits; see computer-credits. */
+    creditRateMicros?: number | null;
   },
   startedAt: Date,
   previousEnd: ComputerRunEnd = "reconciled",
@@ -66,6 +69,7 @@ export async function recordComputerRunStart(
             size: computer.runningSize,
           }),
           startedAt,
+          ...(computer.creditRateMicros != null && { creditRateMicros: computer.creditRateMicros }),
         },
       ],
       skipDuplicates: true,
@@ -108,6 +112,16 @@ export async function recordComputerRunSeen(
  * the transition that calls it.
  */
 export async function recordComputerRunEnd(
+  prisma: PrismaClient,
+  computer: { id: string; runningSince?: Date | null },
+  reason: ComputerRunEnd,
+): Promise<void> {
+  await closeComputerRun(prisma, computer, reason);
+  // Modified by Agental: time since the last charge is taken from credits as the run ends.
+  await chargeEndedComputerRuns(prisma, computer.id);
+}
+
+async function closeComputerRun(
   prisma: RunsClient,
   computer: { id: string; runningSince?: Date | null },
   reason: ComputerRunEnd,
@@ -148,9 +162,15 @@ export async function recordComputerRunEnd(
  * has none. Covers a crash or deploy between a provider call and its usage write, a failed
  * usage write, and paths that stop a computer without recording it.
  */
-export async function reconcileComputerRuns(
+export async function reconcileComputerRuns(prisma: PrismaClient, now = new Date()): Promise<void> {
+  await repairComputerRuns(prisma, now);
+  // Modified by Agental: an end nobody charged (a crash, or a run just closed here) is charged.
+  await chargeEndedComputerRuns(prisma, undefined, now);
+}
+
+async function repairComputerRuns(
   prisma: Pick<PrismaClient, "$executeRaw">,
-  now = new Date(),
+  now: Date,
 ): Promise<void> {
   await prisma.$executeRaw`
     UPDATE "computer_runs" AS r

@@ -9,6 +9,7 @@ import type {
 import type { PrismaClient } from "@rakazo/db";
 import {
   organizationForMember,
+  paidServiceMarkup,
   recordModelCreditReceipt,
   recordUsage,
   reserveModelCredits,
@@ -40,7 +41,8 @@ type Scope = { userId: string; spaceId: string; runId: string; botId: string };
 type Deps = { prisma: PrismaClient; provider: PaidServiceProvider; billing: boolean };
 
 const roundUsd = (usd: number) => Math.round(usd * 1_000_000) / 1_000_000;
-const factor = (billing: boolean) => (billing ? PAID_SERVICE_MARKUP : 1);
+// Modified by Agental: a deployment that sets its own cost markup charges paid services at it.
+const factor = (billing: boolean) => (billing ? paidServiceMarkup(PAID_SERVICE_MARKUP) : 1);
 
 function shownService(service: PaidService, billing: boolean) {
   return {

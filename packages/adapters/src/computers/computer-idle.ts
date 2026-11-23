@@ -16,7 +16,6 @@ import {
   WorkspaceSaveFailedError,
   WorkspaceTooLargeError,
 } from "@rakazo/adapter-kit";
-import { COMPUTER_ALLOWANCE_USED_ERROR } from "@rakazo/contracts";
 import { withAbort } from "@rakazo/core";
 import type { PrismaClient, ThreadEvents } from "@rakazo/db";
 import {
@@ -34,7 +33,7 @@ import { HomeSaveConflictError } from "../storage/home-object-store.js";
 import { diskUpdate, measureComputerDisk } from "./computer-disk.js";
 import { screenLeaseIdForRun, toComputerRef } from "./computer-lifecycle.js";
 import { checkpointComputerWorkspace } from "./computer-workspace.js";
-import { sandboxAllowanceUsedUp } from "./sandbox/sandbox-allowance.js";
+import { computerTimeUsedUp } from "./sandbox/computer-credits.js";
 import { isSandboxDamagedError, isSandboxGoneError } from "./sandbox/sandbox-errors.js";
 import { sandboxKindCapabilities, sandboxKindsWhere } from "./sandbox/sandbox-kind-capabilities.js";
 import {
@@ -482,7 +481,9 @@ export async function sleepComputerIfIdle(
   // the computer up. A person's control holds an idle computer up, but never past those limits;
   // stopping the computer then ends the control and any recording under it.
   const activeControl = hasActiveComputerControl(computer);
-  const allowanceUsed = await sandboxAllowanceUsedUp(deps, computer);
+  // Modified by Agental: where time is taken from credits, it is taken here, and credits can run out.
+  const usedUp = await computerTimeUsedUp(deps, computer);
+  const allowanceUsed = usedUp !== null;
   const limitReached =
     allowanceUsed || activeLimitReached(deps.sandbox, ref, computer.runningSince);
   const runHold = async (): Promise<SleepHold | undefined> => {
@@ -744,7 +745,7 @@ export async function sleepComputerIfIdle(
       deps,
       computer,
       `computer-allowance:${computer.id}:${computer.runningSince?.toISOString() ?? ""}`,
-      `${COMPUTER_ALLOWANCE_USED_ERROR} The computer was saved and stopped.`,
+      `${usedUp} The computer was saved and stopped.`,
     );
 }
 

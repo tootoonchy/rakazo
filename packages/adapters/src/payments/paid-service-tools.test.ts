@@ -1,6 +1,7 @@
 import type { AdapterContext, PaidServiceProvider } from "@rakazo/adapter-kit";
 import {
   organizationForMember,
+  paidServiceMarkup,
   recordModelCreditReceipt,
   recordUsage,
   reserveModelCredits,
@@ -10,6 +11,8 @@ import { serviceCallFromTool, serviceSearchFromTool } from "./paid-service-tools
 import { FakePaidServiceProvider } from "./paid-services-factory.js";
 
 vi.mock("@rakazo/db", () => ({
+  // The deployment sets no markup of its own unless a test says so.
+  paidServiceMarkup: vi.fn((upstream: number) => upstream),
   organizationForMember: vi.fn(),
   reserveModelCredits: vi.fn(),
   recordModelCreditReceipt: vi.fn(),
@@ -126,6 +129,28 @@ describe("service_call", () => {
         totalTokens: 0,
       }),
       expect.objectContaining({ spaceId: "space-1", userId: "user-1", botId: "bot-1" }),
+    );
+  });
+
+  // Modified by Agental: a deployment's own cost markup replaces the paid services' markup.
+  it("shows and settles at the deployment's markup when it sets one", async () => {
+    vi.mocked(paidServiceMarkup).mockReturnValue(2);
+    const provider = new FakePaidServiceProvider();
+    expect(await serviceSearchFromTool(provider, context, { query: "email" }, true)).toEqual({
+      services: [expect.objectContaining({ id: "people.email", price_usd: 0.01 })],
+    });
+    const result = await serviceCallFromTool(
+      { prisma, provider, billing: true },
+      scope,
+      { service: "people.email", query: { full_name: "Ada Example" }, max_cost_usd: 0.05 },
+      "run-1:service_call:markup",
+      context,
+    );
+    expect(result).toMatchObject({ cost_usd: 0.01 });
+    expect(recordUsage).toHaveBeenCalledWith(
+      prisma,
+      expect.objectContaining({ provider: "services", costUsd: 0.01 }),
+      expect.anything(),
     );
   });
 
