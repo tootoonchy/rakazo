@@ -12,6 +12,10 @@ three things more. This page says which are built, how they are set, and what is
 | `MONTHLY_PLATFORM_FEE_CENTS` | The part of each monthly plan payment that is the deployment's fee, not credits. `5000` turns a $200 monthly payment into $150 of credits. A one-time top-up carries no fee.                                                                             | `0`: every cent is credits |
 | `DAILY_CREDIT_CAP_CENTS`     | The most credits one organization's work may take in a UTC day, whatever its balance. `2000` stops new work after $20 of credits in a day. Open holds count, so work in flight cannot overshoot it.                                                      | No daily cap, as upstream  |
 
+- **A client can have its own daily cap.** `POST /api/v1/service/credits` with `daily_cap_cents`
+  sets it for one Space's organization; `null` returns it to `DAILY_CREDIT_CAP_CENTS`. The change
+  is written to the billing audit journal. `GET` on the same path shows the cap in force and what
+  the day has taken so far.
 - **Real cost stays recorded.** `usage_records.costUsd` is still what the provider charged (for
   the hosted model provider, the cost it reports per generation). What was taken is in
   `model_credit_entries`. The two can be compared per organization.
@@ -47,8 +51,7 @@ recorded cost with a customer price, and the markup would be applied on top of i
   the allowance. Metering computer minutes at the markup is new work.
 - **Connector fees** are not metered. Paid services bots buy already carry their own fixed
   markup.
-- **No alerts.** Warnings at 50, 80 and 100 percent of a client's credits do not exist. The daily
-  cap is one value for every client; a cap per client would need a place to store it.
+- **No alerts.** Warnings at 50, 80 and 100 percent of a client's credits do not exist.
 - **Top-up prompt.** Running out of credits sends the person to model connections, not to a
   top-up screen.
 - **Cheap models by default, premium by opt-in.** The deployment's default model is a setting,
