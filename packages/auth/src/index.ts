@@ -57,6 +57,7 @@ import { hasRecentIdentityConfirmation, identityConfirmation } from "./identity-
 import type { OidcConfig } from "./oidc.js";
 import { isCurrentOidcAccount, oidcDiscovery } from "./oidc.js";
 import { passkeyRelyingParty } from "./passkey.js";
+import { serviceSignIn } from "./service-sign-in.js";
 import type { AppleProviderConfig, GoogleProviderConfig, SocialAuthConfig } from "./social.js";
 import {
   appleUserInfo,
@@ -95,6 +96,11 @@ export {
   pluginSubmissionReviewedEmail,
 } from "./plugin-submission-email.js";
 export { referralEmail } from "./referral-email.js";
+export {
+  createServiceSignInToken,
+  readServiceSignInToken,
+  SERVICE_SIGN_IN_PATH,
+} from "./service-sign-in.js";
 export type { SocialAuthConfig } from "./social.js";
 export { publicSignInProviders, socialAuthFromFields } from "./social.js";
 export { welcomeEmail } from "./welcome-email.js";
@@ -103,6 +109,8 @@ export interface AuthEnv {
   analytics?: ProductAnalytics;
   partnerProgram?: PartnerProgram;
   passwordAuth?: boolean;
+  /** Modified by Agental: lets the service API hand out one-time sign-in links. */
+  serviceSignInSecret?: string;
   /** Opt-in: rejects new passwords found in Have I Been Pwned. Calls an outside service. */
   breachedPasswordCheck?: boolean;
   oidc?: OidcConfig;
@@ -486,6 +494,9 @@ export function createAuth(prisma: PrismaClient, env: AuthEnv) {
         env.passwordAuth !== false,
       ),
       identityConfirmation(env.email, emailLocaleOf),
+      ...(env.serviceSignInSecret
+        ? [serviceSignIn({ secret: env.serviceSignInSecret, appUrl: env.webOrigin })]
+        : []),
       ...(discovery ? [discovery.plugin] : []),
       ...(emailCodeSignIn
         ? [

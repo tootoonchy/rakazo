@@ -154,8 +154,9 @@ import { mountMeetingWebhook } from "./meetings/meeting-routes.js";
 import { startMessagingRuntime } from "./messaging/messaging-runtime.js";
 import { settleWithTimeout } from "./messaging/team-chat-startup.js";
 import { recordSignInEnded } from "./models/model-connect-analytics.js";
-import { createRouter, routerEnv } from "./router.js";
+import { createRouterWithContext, routerEnv } from "./router.js";
 import { handleHttpError } from "./rpc-errors.js";
+import { mountService, reportTicketsToHub } from "./service/service-wiring.js";
 import type { SpaceDeletionDeps } from "./spaces/space-deletion.js";
 import { afterSpaceDeparture } from "./spaces/space-departure.js";
 import { cspReportRoutes } from "./telemetry/csp-report.js";
@@ -316,12 +317,14 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
       runs!,
     );
   foundation.useJobs(jobs);
-  const ticketChanges = createTicketChangeNotifier({
+  const boardTicketChanges = createTicketChangeNotifier({
     boardEvents,
     jobs,
     prisma,
     deploymentLabs: env.deploymentLabs,
   });
+  // Modified by Agental: a ticket the project hub created reports its changes back to it.
+  const ticketChanges = reportTicketsToHub(boardTicketChanges, prisma, env);
   const sandbox: SandboxProvider =
     sandboxOverride ??
     (await createRunSandbox(env.sandboxProvider, {
@@ -466,6 +469,7 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
     analytics,
     partnerProgram,
     passwordAuth: env.passwordAuth,
+    serviceSignInSecret: env.serviceApi?.secret,
     breachedPasswordCheck: env.breachedPasswordCheck,
     oidc: env.oidc,
     social: env.social,
@@ -660,7 +664,7 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
       enabled: (spaceId) => meetings.enabled(spaceId),
     });
 
-  const router = createRouter({
+  const { router, ctx: routerContext } = createRouterWithContext({
     // Only computers people paired: nothing clears a routine's "Use my computer" when this
     // server's own screen is turned off and on again.
     userDevices: userDevicesOverride ?? userDevices,
@@ -871,6 +875,8 @@ async function buildApp(overrides: CreateAppOverrides): Promise<AppHandles> {
   meetingMedia?.mount(app);
   if (meetingCalendar) mountMeetingCalendarHttp(app, meetingCalendar, sessionActor);
   mountWebhookHttpRoutes(app, { prisma, secrets, events, jobs });
+  // Modified by Agental: provisioning, sign-in links, tickets and notes for the project hub.
+  mountService(app, env, routerContext, { prisma, ticketChanges, memory });
   if (env.inboundEmail) {
     mountEmailInboundRoute(app, {
       prisma,

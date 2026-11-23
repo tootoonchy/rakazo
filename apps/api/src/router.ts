@@ -185,7 +185,16 @@ export interface RouterDeps {
 }
 
 export function createRouter(deps: RouterDeps) {
+  return createRouterWithContext(deps).router;
+}
+
+/** Modified by Agental: the router, and the context its routes share, for the service API. */
+export function createRouterWithContext(deps: RouterDeps) {
   const ctx = createRouterContext(deps);
+  return { router: buildRouter(ctx), ctx };
+}
+
+function buildRouter(ctx: ReturnType<typeof createRouterContext>) {
   const { os } = ctx;
 
   return os.router({

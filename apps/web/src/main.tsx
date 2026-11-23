@@ -19,6 +19,7 @@ import { markAfterPaint, markOnce } from "./lib/platform/performance";
 import { installPreloadRecovery } from "./lib/platform/preload-recovery";
 import { applyUiAppearance, watchSystemAppearance } from "./lib/preferences/ui-appearance";
 import { queryClient } from "./lib/query/query";
+import { adoptSpaceFromUrl } from "./lib/query/rpc";
 import { registerServiceWorker } from "./pwa/register";
 import { lockStandaloneZoom } from "./pwa/standalone";
 import "./styles.css";
@@ -65,6 +66,8 @@ function AppearanceSync() {
   return null;
 }
 
+// Modified by Agental: open the Space a sign-in link from the project hub names.
+adoptSpaceFromUrl();
 createRoot(document.getElementById("root")!, { onCaughtError: reportCaughtReactError }).render(
   <StrictMode>
     <PerformanceProbe />
