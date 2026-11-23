@@ -121,6 +121,23 @@ dbTests("model credits ledger", () => {
     await expect(reserveModelCredits(prisma, organizationId, 1.01)).rejects.toThrow("Daily");
     const status = await dailyCreditCapStatus(operator, organizationId, dailyCreditCapMicros());
     expect(status).toEqual({ capMicros: 3_000_000n, own: true, usedMicros: 2_000_000n });
+    // Two changes at once: the later one's journal entry names the value the earlier one set.
+    await Promise.all([
+      setDailyCreditCap(operator, organizationId, 4_000_000n),
+      setDailyCreditCap(operator, organizationId, 5_000_000n),
+    ]);
+    const journal = await operator.billingAuditEvent.findMany({
+      where: { organizationId, kind: "daily_cap_changed" },
+      select: { details: true },
+    });
+    const steps = journal.map(
+      (event) => event.details as { previousMicros: string | null; capMicros: string | null },
+    );
+    const final = (await dailyCreditCapStatus(operator, organizationId, null)).capMicros;
+    // Every change starts from a value some other change (or the start) left, with none repeated.
+    expect(steps.map((step) => step.previousMicros).sort()).toEqual(
+      [null, ...steps.map((step) => step.capMicros).filter((cap) => cap !== String(final))].sort(),
+    );
     await setDailyCreditCap(operator, organizationId, null);
     await expect(reserveModelCredits(prisma, organizationId, 0.01)).rejects.toThrow("Daily");
     await expect(setDailyCreditCap(operator, organizationId, 0n)).rejects.toThrow("Daily cap");

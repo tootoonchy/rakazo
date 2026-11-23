@@ -66,14 +66,17 @@ export async function setDailyCreditCap(
   if (capMicros !== null && (capMicros <= 0n || capMicros > MAX_DAILY_CAP_MICROS))
     throw new Error("Daily cap must be above $0 and at most $10,000");
   await prisma.$transaction(async (tx) => {
-    const previous = await tx.modelCreditAccount.findUnique({
+    // The account is locked before the old value is read, so two changes at once each record
+    // the value they really replaced. An organization new to credits gets its account here.
+    await tx.$executeRaw`
+      INSERT INTO model_credit_accounts ("organizationId", "updatedAt")
+      VALUES (${organizationId}, now()) ON CONFLICT ("organizationId") DO NOTHING`;
+    const [previous] = await tx.$queryRaw<{ dailyCapMicros: bigint | null }[]>`
+      SELECT "dailyCapMicros" FROM model_credit_accounts
+      WHERE "organizationId"=${organizationId} FOR UPDATE`;
+    await tx.modelCreditAccount.update({
       where: { organizationId },
-      select: { dailyCapMicros: true },
-    });
-    await tx.modelCreditAccount.upsert({
-      where: { organizationId },
-      create: { organizationId, dailyCapMicros: capMicros },
-      update: { dailyCapMicros: capMicros },
+      data: { dailyCapMicros: capMicros },
     });
     await tx.billingAuditEvent.create({
       data: {
