@@ -1,5 +1,6 @@
 import type { Messages } from "@lingui/core";
 import { i18n } from "@lingui/core";
+import { brandI18n } from "@rakazo/i18n/brand";
 import { messages as de } from "@rakazo/i18n/locales/de/messages.po";
 import { messages as en } from "@rakazo/i18n/locales/en/messages.po";
 import { messages as es } from "@rakazo/i18n/locales/es/messages.po";
@@ -41,6 +42,8 @@ const catalogs: Record<UiLocale, Messages> = {
 };
 
 installPluralRules();
+// Modified by Agental: catalogs are written in the upstream name; the brand's name is swapped in as they load.
+brandI18n(i18n);
 i18n.load(catalogs);
 i18n.activate("en");
 

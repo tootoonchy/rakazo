@@ -1,4 +1,5 @@
 import type { SCIMOptions } from "@better-auth/scim";
+import { BRAND } from "@rakazo/contracts/brand";
 import { displayName, isMessagingEmail } from "@rakazo/core";
 import type { PrismaClient } from "@rakazo/db";
 import type { BetterAuthOptions } from "better-auth";
@@ -100,7 +101,7 @@ export async function createDirectory(
     };
   };
   return betterAuth({
-    appName: "Rakazo",
+    appName: BRAND.name,
     logger: options.logger,
     secret: options.secret,
     baseURL: options.baseURL,

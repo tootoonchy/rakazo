@@ -1,4 +1,5 @@
 import { i18n } from "@lingui/core";
+import { brandI18n } from "@rakazo/i18n/brand";
 import { desktopBridge } from "../platform/desktop";
 import { importChunk } from "../platform/preload-recovery";
 import { applyUiDirection } from "./apply-ui-direction";
@@ -6,6 +7,9 @@ import type { UiLocale } from "./ui-locale";
 import { persistUiLocale, resolveUiLocale } from "./ui-locale";
 
 export { i18n };
+
+// Modified by Agental: catalogs are written in the upstream name; the brand's name is swapped in as they load.
+brandI18n(i18n);
 
 type CatalogMessages = Parameters<typeof i18n.load>[1];
 type CatalogModule = { messages: CatalogMessages };

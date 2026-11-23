@@ -1,3 +1,10 @@
+Agental is a modified version of Rakazo, https://github.com/elie222/rakazo,
+Copyright the Rakazo contributors, used under the Apache License, Version 2.0
+(see LICENSE). Files changed or added for Agental carry a "Modified by Agental"
+notice. The Agental theme bundles the Inter typeface, Copyright (c) 2016 The
+Inter Project Authors, under the SIL Open Font License, Version 1.1
+(packages/contracts/src/brand/theme/fonts/Inter-LICENSE.txt).
+
 Rakazo includes third-party code under the notices below.
 
 Importing a Grok Bot (packages/core/src/agent-import/grok-bot.ts) adapts the

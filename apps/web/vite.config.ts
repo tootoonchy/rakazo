@@ -14,6 +14,7 @@ import { wuyingScreenAssets } from "../../packages/adapters/src/providers/comput
 import { wuyingScreenPolicy } from "../../packages/adapters/src/providers/computer/wuying/wuying-screen-policy.ts";
 import { createServiceLogger } from "../../packages/logging/src/env.ts";
 import { apiProxy } from "./server/api-proxy.js";
+import { brandIndexHtml, openSourceNotice } from "./server/brand-page.js";
 import { withInstanceThemeLink } from "./server/instance-theme.js";
 import {
   attachDesktopStackProbe,
@@ -124,6 +125,9 @@ export default defineConfig(({ command, mode }) => {
         transformIndexHtml: (html) =>
           command === "serve" && instanceTheme ? withInstanceThemeLink(html) : html,
       },
+      // Modified by Agental: the page title and description come from the brand.
+      { name: "brand-index-html", transformIndexHtml: (html) => brandIndexHtml(html) },
+      openSourceNotice(),
     ],
     server: {
       host: process.env.RAKAZO_DEV_HOST ?? rootEnv.RAKAZO_DEV_HOST ?? "127.0.0.1",

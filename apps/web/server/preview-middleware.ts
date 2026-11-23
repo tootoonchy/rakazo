@@ -26,6 +26,7 @@ import {
 import { resolveScreenProxySecret } from "@rakazo/core/node/secrets-guard";
 import type { Logger } from "@rakazo/logging";
 import { ASSET_ARCHIVE_DIR, archiveAssets } from "./asset-archive.js";
+import { brandThemeFile } from "./brand-page.js";
 import { instanceThemeIndexMiddleware, instanceThemeMiddleware } from "./instance-theme.js";
 import { missingAssetMiddleware } from "./missing-asset.js";
 import {
@@ -483,7 +484,8 @@ export function attachNovncProxy(server: WebServerHost, settings: WebServerSetti
 
 /** The web server's environment, read once. Invalid CSP origins throw, so it refuses to start. */
 export function webServerSettings(read: (name: string) => string | undefined, log: Logger) {
-  const themeFile = read("RAKAZO_THEME");
+  // Modified by Agental: a themed brand ships its own look, used unless RAKAZO_THEME names another.
+  const themeFile = read("RAKAZO_THEME") ?? brandThemeFile();
   return {
     log,
     api: read("API_PROXY_TARGET") ?? "http://127.0.0.1:3100",
