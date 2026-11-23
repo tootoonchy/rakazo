@@ -5,6 +5,8 @@ import type { PrismaClient } from "../database/client.js";
 import { createDb } from "../database/client.js";
 import { JsonColumnMismatchError } from "../database/json-column.js";
 import { asSystem } from "../database/row-security.js";
+import { dailyCreditCapMicros } from "./cost-markup.js";
+import { dailyCreditCapStatus, setDailyCreditCap } from "./model-credit-cap.js";
 import {
   creditAccount,
   expireModelCredits,
@@ -104,6 +106,24 @@ dbTests("model credits ledger", () => {
     const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
     await reserveModelCredits(prisma, organizationId, 3, undefined, tomorrow);
     expect(await balance()).toBe(42_000_000n);
+  });
+  it("an organization's own daily cap replaces the deployment's, and clearing it restores the default", async () => {
+    vi.stubEnv("DAILY_CREDIT_CAP_CENTS", "100");
+    await reconcileCreditPurchase(prisma, organizationId, {
+      id: `${organizationId}-own-cap`,
+      amountCents: 5000,
+    });
+    // The default would stop a $2 hold; this organization's own $3 cap allows it.
+    // An operator setting, so it is made the way an operator command makes it.
+    const operator = asSystem(prisma);
+    await setDailyCreditCap(operator, organizationId, 3_000_000n);
+    await reserveModelCredits(prisma, organizationId, 2);
+    await expect(reserveModelCredits(prisma, organizationId, 1.01)).rejects.toThrow("Daily");
+    const status = await dailyCreditCapStatus(operator, organizationId, dailyCreditCapMicros());
+    expect(status).toEqual({ capMicros: 3_000_000n, own: true, usedMicros: 2_000_000n });
+    await setDailyCreditCap(operator, organizationId, null);
+    await expect(reserveModelCredits(prisma, organizationId, 0.01)).rejects.toThrow("Daily");
+    await expect(setDailyCreditCap(operator, organizationId, 0n)).rejects.toThrow("Daily cap");
   });
   it("holds disputed credits, returns them when the dispute is won, and never past a refund", async () => {
     const id = `${organizationId}-dispute`;

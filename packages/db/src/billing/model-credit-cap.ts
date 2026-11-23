@@ -41,12 +41,75 @@ export async function enforceDailyCreditCap(
   capMicros: bigint,
   now: Date,
 ) {
-  const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   const [row] = await tx.$queryRaw<{ micros: bigint }[]>`
     SELECT COALESCE(-SUM("amountMicros"), 0)::bigint AS micros
     FROM model_credit_entries
-    WHERE "organizationId"=${organizationId} AND "callId" IS NOT NULL AND "createdAt" >= ${dayStart}`;
+    WHERE "organizationId"=${organizationId} AND "callId" IS NOT NULL AND "createdAt" >= ${utcDayStart(now)}`;
   if (row!.micros + reservationMicros > capMicros) throw new Error(MODEL_CREDIT_DAILY_CAP_ERROR);
+}
+
+const MAX_DAILY_CAP_MICROS = 10_000_000_000n;
+
+/** Start of the UTC day `now` falls in: the day a daily cap counts. */
+const utcDayStart = (now: Date) =>
+  new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+
+/**
+ * Modified by Agental: sets an organization's own daily cap, or with null returns it to the
+ * deployment's default. Operator-only: no member-facing mutation reaches this.
+ */
+export async function setDailyCreditCap(
+  prisma: PrismaClient,
+  organizationId: string,
+  capMicros: bigint | null,
+) {
+  if (capMicros !== null && (capMicros <= 0n || capMicros > MAX_DAILY_CAP_MICROS))
+    throw new Error("Daily cap must be above $0 and at most $10,000");
+  await prisma.$transaction(async (tx) => {
+    const previous = await tx.modelCreditAccount.findUnique({
+      where: { organizationId },
+      select: { dailyCapMicros: true },
+    });
+    await tx.modelCreditAccount.upsert({
+      where: { organizationId },
+      create: { organizationId, dailyCapMicros: capMicros },
+      update: { dailyCapMicros: capMicros },
+    });
+    await tx.billingAuditEvent.create({
+      data: {
+        source: `daily-cap:${randomUUID()}`,
+        kind: "daily_cap_changed",
+        organizationId,
+        details: {
+          previousMicros: previous?.dailyCapMicros?.toString() ?? null,
+          capMicros: capMicros?.toString() ?? null,
+          by: "operator",
+        },
+      },
+    });
+  });
+}
+
+/** The cap in force for an organization today and what its work has taken so far (holds included). */
+export async function dailyCreditCapStatus(
+  prisma: PrismaClient,
+  organizationId: string,
+  defaultCapMicros: bigint | null,
+  now = new Date(),
+) {
+  const account = await prisma.modelCreditAccount.findUnique({
+    where: { organizationId },
+    select: { dailyCapMicros: true },
+  });
+  const [row] = await prisma.$queryRaw<{ micros: bigint }[]>`
+    SELECT COALESCE(-SUM("amountMicros"), 0)::bigint AS micros
+    FROM model_credit_entries
+    WHERE "organizationId"=${organizationId} AND "callId" IS NOT NULL AND "createdAt" >= ${utcDayStart(now)}`;
+  return {
+    capMicros: account?.dailyCapMicros ?? defaultCapMicros,
+    own: account?.dailyCapMicros != null,
+    usedMicros: row!.micros,
+  };
 }
 
 /** Operator-only control; no user-facing mutation exposes this setting. Null removes the cap. */

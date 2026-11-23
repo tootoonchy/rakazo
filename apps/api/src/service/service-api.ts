@@ -8,7 +8,14 @@ import type { Actor, Bot, McpServerConfigInput as McpServerConfig } from "@rakaz
 import { CreateRoutineInput, McpServerConfigInput } from "@rakazo/contracts";
 import { hasValidBearerToken } from "@rakazo/core/node/secrets-guard";
 import type { Prisma, PrismaClient } from "@rakazo/db";
-import { createOrganizationWithDefaultSpace, ensureBoard, runAsSystem } from "@rakazo/db";
+import {
+  createOrganizationWithDefaultSpace,
+  dailyCreditCapMicros,
+  dailyCreditCapStatus,
+  ensureBoard,
+  runAsSystem,
+  setDailyCreditCap,
+} from "@rakazo/db";
 import { bestEffort } from "@rakazo/logging";
 import type { Context, Hono } from "hono";
 import * as z from "zod";
@@ -28,7 +35,8 @@ import { PROJECT_TYPES, STARTER_BOTS, STARTER_ROUTINES } from "./service-starter
  *   GET  /api/v1/service/tickets        where a ticket stands
  *   POST /api/v1/service/memory         write a note every bot in the Space can read
  *   GET  /api/v1/service/usage          real cost and credits charged per project, for a month
- *   GET  /api/v1/service/credits        the credits a project's Space has left
+ *   GET  /api/v1/service/credits        the credits a project's Space has left, and its daily cap
+ *   POST /api/v1/service/credits        set the Space's own daily cap, or return it to the default
  */
 export const SERVICE_API_PATH = "/api/v1/service";
 const MAX_BODY_BYTES = 256 * 1024;
@@ -94,6 +102,11 @@ const TicketInput = z.object({
   title: line(200),
   description: z.string().max(20_000).optional(),
   assignee: botKey.default("operator"),
+});
+const DailyCapInput = z.object({
+  space_id: line(64),
+  // Whole cents, up to $10,000 a day. Null follows the deployment's default.
+  daily_cap_cents: z.number().int().min(1).max(1_000_000).nullable(),
 });
 const MemoryInput = z.object({
   space_id: line(64),
@@ -400,11 +413,33 @@ async function creditsLeft(prisma: PrismaClient, spaceId: string) {
     where: { organizationId: space.organizationId },
     select: { balanceMicros: true },
   });
+  const daily = await dailyCreditCapStatus(prisma, space.organizationId, dailyCreditCapMicros());
   return {
     space_id: spaceId,
     has_account: Boolean(account),
-    balance_usd: Number(account?.balanceMicros ?? 0n) / 1_000_000,
+    balance_usd: usd(account?.balanceMicros ?? 0n),
+    // Null means no daily cap. `daily_cap_own` tells the Space's own cap from the default.
+    daily_cap_usd: daily.capMicros === null ? null : usd(daily.capMicros),
+    daily_cap_own: daily.own,
+    used_today_usd: usd(daily.usedMicros),
   };
+}
+
+const usd = (micros: bigint) => Number(micros) / 1_000_000;
+
+/** Sets the Space's own daily cap in cents, or with null returns it to the deployment's default. */
+async function setDailyCap(prisma: PrismaClient, input: z.infer<typeof DailyCapInput>) {
+  const space = await prisma.space.findUnique({
+    where: { id: input.space_id },
+    select: { organizationId: true },
+  });
+  if (!space) throw new ServiceError(404, "space_not_found");
+  await setDailyCreditCap(
+    prisma,
+    space.organizationId,
+    input.daily_cap_cents === null ? null : BigInt(input.daily_cap_cents) * 10_000n,
+  );
+  return creditsLeft(prisma, input.space_id);
 }
 
 async function signInLink(deps: ServiceApiDeps, input: z.infer<typeof SignInLinkInput>) {
@@ -479,5 +514,9 @@ export function mountServiceApi(app: Hono, deps: ServiceApiDeps) {
   app.get(
     `${SERVICE_API_PATH}/credits`,
     handle(z.object({ space_id: line(64) }), (input) => creditsLeft(deps.prisma, input.space_id)),
+  );
+  app.post(
+    `${SERVICE_API_PATH}/credits`,
+    handle(DailyCapInput, (input) => setDailyCap(deps.prisma, input)),
   );
 }
