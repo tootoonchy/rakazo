@@ -105,6 +105,14 @@ export function useCreditAlert(onAddCredits: () => void) {
       },
     );
   }, [status, spaceId, level, refill, canAdd]);
+  // When the app gives way to the paywall (nothing left and no plan), that screen is the notice:
+  // an earlier one must not stay on top of it.
+  useEffect(
+    () => () => {
+      if (open.current !== null) toast.dismiss(TOAST_ID);
+    },
+    [],
+  );
 }
 
 function CreditAlert({
