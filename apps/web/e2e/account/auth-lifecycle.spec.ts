@@ -255,7 +255,9 @@ test("logout protects bot deep links and sign-in restores the session", async ({
       .locator("form")
       .getByText(/invalid email or password|invalid credentials|incorrect password/i),
   ).toBeVisible();
-  await expect(page).toHaveURL(/\/sign-in$/);
+  // Modified by Agental: a protected link sends the person to sign in with the page to return
+  // to, so the address keeps that `next` value while they are still on the sign-in page.
+  await expect(page).toHaveURL(/\/sign-in(\?next=[^#]*)?$/);
   await captureScreenshot(page, testInfo, "39-invalid-credentials");
 
   await page.getByPlaceholder("Password").fill(password);
