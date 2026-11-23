@@ -114,7 +114,9 @@ Not checked, because each needs an account or a device this branch has never had
   with both apps installed could open the wrong one from such a link. Removing it means
   changing those native files and testing on devices.
 - **"This computer" in the desktop app** downloads and runs upstream's server images. It works,
-  but that local server is not the white-label.
+  but that local server is not the white-label. The macOS build is packaged without the
+  downloadable server bundle, because the workflow publishes none, so on a Mac that choice
+  uses Docker.
 - **Desktop updates.** The macOS update feed points at this repository's releases, and the
   workflow publishes none yet. Linux update signatures are pinned to upstream's key, so a
   branded Linux build cannot update itself.

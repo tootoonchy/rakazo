@@ -112,13 +112,13 @@ jobs:
           RAKAZO_CLOUD_URL: ${{ vars.APP_URL }}
       - name: Name the app, its identifier and its update feed for the brand
         run: pnpm exec tsx apps/desktop/scripts/brand-package.ts apps/desktop/package.json
-      - name: Describe the server bundle the packaged app expects
+      # This job publishes no server archive, so the app is packaged without one to download:
+      # an empty descriptor leaves "This computer" on its Docker path instead of a download that
+      # would fail. A release that also publishes the archive writes the real descriptor here.
+      - name: Package without a downloadable server bundle
         run: |
-          set -euo pipefail
-          node scripts/build-server-bundle.mjs "$RUNNER_TEMP/server-bundle" \
-            "https://github.com/${GITHUB_REPOSITORY}/releases/download/v$(node -p "require('./apps/desktop/package.json').version")"
           mkdir -p apps/desktop/build
-          cp "$RUNNER_TEMP/server-bundle/server-bundle.json" apps/desktop/build/server-bundle.json
+          echo '{}' > apps/desktop/build/server-bundle.json
       - name: Package the signed and notarized universal app
         env:
           CSC_LINK: ${{ secrets.DESKTOP_MAC_CSC_LINK }}
