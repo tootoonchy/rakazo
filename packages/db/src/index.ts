@@ -15,6 +15,7 @@ export * from "./billing/billing.js";
 export * from "./billing/cost-markup.js";
 export * from "./billing/model-credit-cap.js";
 export * from "./billing/model-credits.js";
+export * from "./billing/premium-models.js";
 export * from "./billing/provider-transactions.js";
 export * from "./billing/sandbox-allowance.js";
 export * from "./billing/spending.js";

@@ -2,7 +2,7 @@
 import { randomBytes } from "node:crypto";
 import type { MemoryStore, SecretRecord } from "@rakazo/adapter-kit";
 import type { TicketChangeNotifier } from "@rakazo/adapters";
-import { createTicket } from "@rakazo/adapters";
+import { createTicket, premiumModelOutputUsd } from "@rakazo/adapters";
 import { createServiceSignInToken, SERVICE_SIGN_IN_PATH } from "@rakazo/auth";
 import type { Actor, Bot, McpServerConfigInput as McpServerConfig } from "@rakazo/contracts";
 import { CreateRoutineInput, McpServerConfigInput } from "@rakazo/contracts";
@@ -15,6 +15,7 @@ import {
   ensureBoard,
   runAsSystem,
   setDailyCreditCap,
+  setPremiumModels,
 } from "@rakazo/db";
 import { bestEffort } from "@rakazo/logging";
 import type { Context, Hono } from "hono";
@@ -36,7 +37,7 @@ import { PROJECT_TYPES, STARTER_BOTS, STARTER_ROUTINES } from "./service-starter
  *   POST /api/v1/service/memory         write a note every bot in the Space can read
  *   GET  /api/v1/service/usage          real cost and credits charged per project, for a month
  *   GET  /api/v1/service/credits        the credits a project's Space has left, and its daily cap
- *   POST /api/v1/service/credits        set the Space's own daily cap, or return it to the default
+ *   POST /api/v1/service/credits        set the Space's own daily cap and its premium models opt-in
  */
 export const SERVICE_API_PATH = "/api/v1/service";
 const MAX_BODY_BYTES = 256 * 1024;
@@ -103,11 +104,18 @@ const TicketInput = z.object({
   description: z.string().max(20_000).optional(),
   assignee: botKey.default("operator"),
 });
-const DailyCapInput = z.object({
-  space_id: line(64),
-  // Whole cents, up to $10,000 a day. Null follows the deployment's default.
-  daily_cap_cents: z.number().int().min(1).max(1_000_000).nullable(),
-});
+const DailyCapInput = z
+  .object({
+    space_id: line(64),
+    // Whole cents, up to $10,000 a day. Null follows the deployment's default.
+    daily_cap_cents: z.number().int().min(1).max(1_000_000).nullable().optional(),
+    // Whether the Space's credits may pay for premium models.
+    premium_models: z.boolean().optional(),
+  })
+  // A setting left out is not changed, so a call must name at least one.
+  .refine((input) => input.daily_cap_cents !== undefined || input.premium_models !== undefined, {
+    path: ["daily_cap_cents"],
+  });
 const MemoryInput = z.object({
   space_id: line(64),
   path: z.string().regex(/^[a-z0-9][a-z0-9/_-]{0,118}\.md$/),
@@ -411,7 +419,7 @@ async function creditsLeft(prisma: PrismaClient, spaceId: string) {
   if (!space) throw new ServiceError(404, "space_not_found");
   const account = await prisma.modelCreditAccount.findUnique({
     where: { organizationId: space.organizationId },
-    select: { balanceMicros: true },
+    select: { balanceMicros: true, premiumModels: true },
   });
   const daily = await dailyCreditCapStatus(prisma, space.organizationId, dailyCreditCapMicros());
   return {
@@ -422,23 +430,33 @@ async function creditsLeft(prisma: PrismaClient, spaceId: string) {
     daily_cap_usd: daily.capMicros === null ? null : usd(daily.capMicros),
     daily_cap_own: daily.own,
     used_today_usd: usd(daily.usedMicros),
+    // Whether these credits may pay for a premium model, and the output price (dollars per
+    // million tokens) from which a model is premium. Null means no model is premium.
+    premium_models: account?.premiumModels === true,
+    premium_model_output_usd: premiumModelOutputUsd(),
   };
 }
 
 const usd = (micros: bigint) => Number(micros) / 1_000_000;
 
-/** Sets the Space's own daily cap in cents, or with null returns it to the deployment's default. */
+/**
+ * Sets the Space's own daily cap in cents (null returns it to the deployment's default) and
+ * whether its credits may pay for premium models. A setting left out is not changed.
+ */
 async function setDailyCap(prisma: PrismaClient, input: z.infer<typeof DailyCapInput>) {
   const space = await prisma.space.findUnique({
     where: { id: input.space_id },
     select: { organizationId: true },
   });
   if (!space) throw new ServiceError(404, "space_not_found");
-  await setDailyCreditCap(
-    prisma,
-    space.organizationId,
-    input.daily_cap_cents === null ? null : BigInt(input.daily_cap_cents) * 10_000n,
-  );
+  if (input.daily_cap_cents !== undefined)
+    await setDailyCreditCap(
+      prisma,
+      space.organizationId,
+      input.daily_cap_cents === null ? null : BigInt(input.daily_cap_cents) * 10_000n,
+    );
+  if (input.premium_models !== undefined)
+    await setPremiumModels(prisma, space.organizationId, input.premium_models);
   return creditsLeft(prisma, input.space_id);
 }
 

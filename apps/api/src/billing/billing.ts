@@ -18,6 +18,7 @@ import {
 } from "@rakazo/adapter-kit";
 import {
   holdsBillingSubscription,
+  premiumDefaultModelWarning,
   sandboxAllowance,
   sandboxDisplayedHourMicros,
   sandboxHoursLeft,
@@ -167,6 +168,9 @@ export function createBillingService(deps: {
   /** A mobile checkout returns through the API either way, which hands back to the app. */
   const mobileReturnUrl = `${returnUrl}?client=mobile`;
   const modelCredits = provider.describe().capabilities.modelCredits === true;
+  // Modified by Agental: said once at startup, where a bad premium setting also stops the server.
+  const premiumDefault = modelCredits ? premiumDefaultModelWarning() : null;
+  if (premiumDefault) getLogger().warn(premiumDefault);
   const referrals = createReferrals(deps);
   const partnerSales = createPartnerSales({ ...deps, program: deps.partnerProgram });
   const supportsComputerSizing = () =>
