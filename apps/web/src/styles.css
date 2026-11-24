@@ -1,5 +1,9 @@
+/* Modified by Agental: Arc's foundation tokens (docs/design-registries.md) sit in the lowest layer, declared before
+   Tailwind's, so the product's own tokens and Tailwind's theme win wherever a variable name is shared. */
+@layer arc;
 @import "tailwindcss";
 @import "@rakazo/ui-web/styles.css";
+@import "@rakazo/ui-web/components/arc/foundation.css" layer(arc);
 
 @source "../../packages/ui-web/src/**/*.{ts,tsx}";
 @source "./src/**/*.{ts,tsx}";
