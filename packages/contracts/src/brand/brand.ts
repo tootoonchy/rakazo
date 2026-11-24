@@ -1,4 +1,5 @@
 // Modified by Agental: new file in the Agental white-label of Rakazo (Apache-2.0, see NOTICE).
+import type { ByokTierTerms } from "../billing/billing.js";
 
 /**
  * The white-label in one place. Everything a person sees that names the product, links to its
@@ -27,6 +28,11 @@ export type Brand = {
   upstreamPromos: boolean;
   /** Where the code this product is built from lives, for the open-source credits. */
   source: { name: string; url: string; license: string };
+  /**
+   * The one own-key plan this brand sells, in place of upstream's tiers; null sells upstream's.
+   * It takes Standard's place, the plan every organization starts on.
+   */
+  ownKeyPlan: ByokTierTerms | null;
 };
 
 /** The name the upstream code and its translation catalogs are written in. */
@@ -57,6 +63,7 @@ const UPSTREAM: Brand = {
   iconPath: "",
   upstreamPromos: true,
   source: { name: UPSTREAM_NAME, url: "https://github.com/elie222/rakazo", license: "Apache-2.0" },
+  ownKeyPlan: null,
 };
 
 const AGENTAL: Brand = {
@@ -81,6 +88,14 @@ const AGENTAL: Brand = {
   iconPath: "/brand/agental",
   upstreamPromos: false,
   source: UPSTREAM.source,
+  // $99 a month or ten months a year, with the computer time and size of upstream's $99 tier.
+  ownKeyPlan: {
+    name: "Own Key",
+    monthlyPriceCents: 9900,
+    annualPriceCents: 99000,
+    computerAllowanceCents: 4000,
+    computerSize: "xlarge",
+  },
 };
 
 /** Set by the web build (`define` in apps/web/vite.config.ts); absent everywhere else. */

@@ -1,4 +1,5 @@
 // Modified by Agental: new file in the Agental white-label of Rakazo (Apache-2.0, see NOTICE).
+import { BYOK_TIERS } from "@rakazo/contracts";
 import { BRAND } from "@rakazo/contracts/brand";
 import { catalogMatchesBilling, planCatalog, syncPlanCatalog } from "./stripe-plan-catalog.js";
 
@@ -17,7 +18,11 @@ if (!secretKey) {
 }
 
 try {
-  const changes = await syncPlanCatalog({ secretKey, catalog: planCatalog(BRAND.name), apply });
+  const changes = await syncPlanCatalog({
+    secretKey,
+    catalog: planCatalog(BRAND.name, BYOK_TIERS.standard),
+    apply,
+  });
   for (const change of changes) {
     if ("name" in change)
       process.stdout.write(`${change.action} ${change.productId} "${change.name}"\n`);
@@ -38,7 +43,7 @@ try {
   );
   if (!catalogMatchesBilling())
     process.stdout.write(
-      "Warning: billing no longer sells these monthly amounts, so it will not find these prices.\n",
+      "Warning: billing no longer sells the Operator's monthly amount, so it will not find that price.\n",
     );
   process.stdout.write(
     "The server needs these settings (names only): STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, MONTHLY_PLATFORM_FEE_CENTS, COST_MARKUP.\n",
