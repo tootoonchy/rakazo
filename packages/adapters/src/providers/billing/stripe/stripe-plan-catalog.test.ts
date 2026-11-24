@@ -1,4 +1,6 @@
 // Modified by Agental: new file in the Agental white-label of Rakazo (Apache-2.0, see NOTICE).
+
+import { BRANDS } from "@rakazo/contracts/brand";
 import { describe, expect, it } from "vitest";
 import type { CatalogPlan } from "./stripe-plan-catalog.js";
 import { catalogMatchesBilling, planCatalog, syncPlanCatalog } from "./stripe-plan-catalog.js";
@@ -92,7 +94,7 @@ function account() {
   return { products, prices, writes, send };
 }
 
-const catalog = planCatalog("Example");
+const catalog = planCatalog("Example", BRANDS.agental.ownKeyPlan!);
 const sync = (stand: ReturnType<typeof account>, plans: CatalogPlan[] = catalog, apply = true) =>
   syncPlanCatalog({ secretKey, catalog: plans, apply, fetch: stand.send });
 
@@ -129,8 +131,8 @@ describe("plan catalog", () => {
     expect(stand.prices.map((price) => price.lookup_key)).toEqual([
       "rakazo_monthly_credits_20000",
       "rakazo_yearly_credits_200000",
-      "rakazo_byok_max_monthly_9900",
-      "rakazo_byok_max_yearly_99000",
+      "rakazo_byok_monthly_9900",
+      "rakazo_byok_yearly_99000",
     ]);
 
     const writes = stand.writes.length;
@@ -160,7 +162,7 @@ describe("plan catalog", () => {
     const old = stand.prices.find((price) => price.id === "price_3")!;
     expect(old).toMatchObject({ active: false, unit_amount: 9_900 });
     expect(stand.prices.filter((price) => price.active && price.unit_amount === 10_900)).toEqual([
-      expect.objectContaining({ lookup_key: "rakazo_byok_max_monthly_9900" }),
+      expect.objectContaining({ lookup_key: "rakazo_byok_monthly_9900" }),
     ]);
   });
 
@@ -173,17 +175,17 @@ describe("plan catalog", () => {
       active: true,
       currency: "usd",
       unit_amount: 9_900,
-      lookup_key: "rakazo_byok_max_monthly_9900",
+      lookup_key: "rakazo_byok_monthly_9900",
       recurring: { interval: "month", interval_count: 1 },
     });
     const changes = await sync(stand);
     expect(changes.filter((change) => change.action === "create_price")).toHaveLength(3);
     expect(stand.prices.find((price) => price.id === "price_billing")).toMatchObject({
       active: true,
-      lookup_key: "rakazo_byok_max_monthly_9900",
+      lookup_key: "rakazo_byok_monthly_9900",
     });
     expect(
-      stand.prices.filter((price) => price.lookup_key === "rakazo_byok_max_monthly_9900"),
+      stand.prices.filter((price) => price.lookup_key === "rakazo_byok_monthly_9900"),
     ).toHaveLength(1);
   });
 

@@ -1,6 +1,6 @@
 import { BillingNoMonthlyCreditsError, BillingPaymentNotCompletedError } from "@rakazo/adapter-kit";
 import { describe, expect, it, vi } from "vitest";
-import { byokTierOf, StripeBillingProvider } from "./stripe-billing.js";
+import { byokTierOf, StripeBillingProvider, signStripeWebhook } from "./stripe-billing.js";
 
 const toYearly = {
   from: { tier: "standard", interval: "month", amountCents: 1500 },
@@ -476,6 +476,72 @@ describe("Stripe prepaid model credits", () => {
     expect(await provider.listCreditPurchases("cus_fixture")).toEqual([
       { id: "cs_1", amountCents: 1500 },
     ]);
+  });
+  // Modified by Agental: a top-up's checkout asks Stripe for a receipt invoice, so one payment
+  // raises checkout.session.completed and invoice.paid. Both only name the customer to re-read.
+  it("grants a top-up once when both its checkout and its receipt invoice are delivered", async () => {
+    const { provider } = fixture({
+      "/v1/charges": {
+        data: [
+          {
+            id: "ch_topup",
+            payment_intent: "pi_topup",
+            currency: "usd",
+            paid: true,
+            captured: true,
+            disputed: false,
+            amount: 2000,
+            amount_refunded: 0,
+          },
+        ],
+        has_more: false,
+      },
+      "/v1/checkout/sessions": {
+        data: [
+          {
+            id: "cs_topup",
+            mode: "payment",
+            payment_status: "paid",
+            currency: "usd",
+            amount_total: 2000,
+            payment_intent: "pi_topup",
+            metadata: { rakazo_credit_cents: "2000" },
+          },
+        ],
+        has_more: false,
+      },
+      "/v1/invoices": {
+        data: [
+          {
+            id: "in_topup_receipt",
+            currency: "usd",
+            amount_paid: 2000,
+            billing_reason: "manual",
+            lines: { data: [{ amount: 2000, period: { end: 2_000_000_000 }, parent: null }] },
+            parent: null,
+          },
+        ],
+        has_more: false,
+      },
+    });
+    const deliver = (type: string, object: Record<string, unknown>) => {
+      const body = JSON.stringify({ id: `evt_${type}`, type, data: { object } });
+      const headers = new Headers({
+        "stripe-signature": signStripeWebhook("whsec_fixture", body, Math.floor(Date.now() / 1000)),
+      });
+      return provider.parseWebhook(body, headers);
+    };
+    const reads = [];
+    for (const event of [
+      deliver("checkout.session.completed", { id: "cs_topup", customer: "cus_fixture" }),
+      deliver("invoice.paid", { id: "in_topup_receipt", customer: "cus_fixture" }),
+      deliver("checkout.session.completed", { id: "cs_topup", customer: "cus_fixture" }),
+    ]) {
+      expect(event).toEqual({ customerId: "cus_fixture" });
+      reads.push(await provider.listCreditPurchases("cus_fixture"));
+    }
+    // Every read names the one payment by its checkout, so the ledger records it once.
+    for (const read of reads) expect(read).toEqual([{ id: "cs_topup", amountCents: 2000 }]);
   });
   it("uses only credit subscription periods and does not double-count their checkout session", async () => {
     const { provider } = fixture({

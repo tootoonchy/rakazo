@@ -38,7 +38,7 @@ Set on the Railway service. Values are never committed.
 | `BETTER_AUTH_SECRET`, `ENCRYPTION_KEY` | Sessions and stored secrets. Keep both stable. |
 | `BETTER_AUTH_URL`, `WEB_ORIGIN`, `API_URL` | The public address |
 | `OWNER_EMAIL`, `OWNER_PASSWORD` | The operator's own account, created on first start |
-| `SIGNUPS_ENABLED` | Leave closed: clients arrive only through provisioning |
+| `SIGNUPS_ENABLED` | Closed unless set to `true`. Leave closed in production: clients arrive only through provisioning. Open it on staging to sign up test accounts. |
 | `TICKET_BOARD_ENABLED` | `true`, so every Space has its board |
 | `SERVICE_API_SECRET` | The service API (provisioning, sign-in links, tickets, notes) |
 | `PROJECT_HUB_URL`, `PROJECT_HUB_SECRET` | Where ticket changes are reported, and the signing secret |
