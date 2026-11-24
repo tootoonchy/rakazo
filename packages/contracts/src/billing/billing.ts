@@ -144,6 +144,13 @@ export const BillingStatusSchema = z.object({
   creditsAddedAt: z.string().nullable().optional(),
   monthlyAmountCents: z.number().int().positive().nullable().optional(),
   creditPurchasesEnabled: z.boolean().optional(),
+  /**
+   * Modified by Agental: the part of each monthly credit payment that is the deployment's fee,
+   * not credits. Absent from older servers, where all of it is credits.
+   */
+  monthlyPlatformFeeCents: z.number().int().nonnegative().optional(),
+  /** Whether credits pay for models at what the provider charges. Absent from older servers. */
+  creditsAtCost: z.boolean().optional(),
   /** Monthly price of the own-key plan, as subscribed when the organization has it; `null` when free. */
   byokPriceCents: z.number().int().positive().nullable().optional(),
   /** How often `byokPriceCents` bills. Absent from older servers, which bill monthly. */

@@ -365,6 +365,9 @@ export default function Paywall() {
   // What the chosen plan bills each period, as the terms and trial timeline state it.
   const ownKeyPrice = yearly ? usd(yearly) : monthlyPrice;
   const creditPrice = usd(amount);
+  // Modified by Agental: a deployment's monthly fee is not credits.
+  const fee = status.monthlyPlatformFeeCents ?? 0;
+  const creditsIncluded = usd(Math.max(0, amount - fee));
   const features: { label: string; ios: string; android: SymbolName; color: string }[] = [
     {
       label: t`Bots with their own computer`,
@@ -531,7 +534,11 @@ export default function Paywall() {
                   </MenuView>
                 ),
               }}
-              detail={t`All ${ph({ price: creditPrice })} goes to model usage.`}
+              detail={
+                fee
+                  ? t`Includes ${ph({ credits: creditsIncluded })} of model credits.`
+                  : t`All ${ph({ price: creditPrice })} goes to model usage.`
+              }
             />
           )}
         </View>

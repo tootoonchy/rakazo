@@ -97,6 +97,8 @@ export function CreditChoice({
   const [amount, setAmount] = useState<CreditAmount>(DEFAULT_MONTHLY_CREDIT_AMOUNT);
   const [interval, setByokInterval] = useState<ByokInterval>("month");
   const credit = formatBillingAmount(amount, "usd", i18n.locale);
+  const fee = status.monthlyPlatformFeeCents ?? 0;
+  const creditsIncluded = formatBillingAmount(Math.max(0, amount - fee), "usd", i18n.locale);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { logOut, signingOut } = useSignOut("/sign-in", setError);
@@ -223,8 +225,17 @@ export function CreditChoice({
               onChange={(next) => setAmount(ModelCreditAmountSchema.parse(next))}
             />
           }
-          detail={<Trans>All {credit} goes to model usage.</Trans>}
-          features={[...features, t`Models at provider cost`]}
+          detail={
+            // Modified by Agental: a deployment's monthly fee is not credits, and a markup is not cost.
+            fee ? (
+              <Trans>Includes {creditsIncluded} of model credits.</Trans>
+            ) : (
+              <Trans>All {credit} goes to model usage.</Trans>
+            )
+          }
+          features={
+            status.creditsAtCost === false ? features : [...features, t`Models at provider cost`]
+          }
           action={
             <Button
               className="w-full"
