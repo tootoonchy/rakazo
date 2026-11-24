@@ -1,5 +1,6 @@
 // Modified by Agental: new file in the Agental white-label of Rakazo (Apache-2.0, see NOTICE).
-import { BYOK_TIERS, MODEL_CREDIT_AMOUNTS } from "@rakazo/contracts";
+import type { ByokTierTerms } from "@rakazo/contracts";
+import { MODEL_CREDIT_AMOUNTS } from "@rakazo/contracts";
 import { deadlineSignal } from "@rakazo/core";
 import { z } from "zod";
 import { encodeStripeForm, STRIPE_API_VERSION } from "./stripe-billing.js";
@@ -26,12 +27,27 @@ export interface CatalogPlan {
 /** One credit is one cent. */
 const OPERATOR_MONTHLY_CENTS = 20_000;
 const OPERATOR_PLATFORM_FEE_CENTS = 5_000;
-const OWN_KEY_TIER = "max";
-const OWN_KEY_MONTHLY_CENTS = 9_900;
 /** A year costs ten months. */
 const YEARLY_MONTHS = 10;
 
-export function planCatalog(brandName: string): CatalogPlan[] {
+/**
+ * `ownKey` is the own-key plan billing sells (its Standard tier), so the lookup keys are the
+ * ones billing asks for: Standard's keys name no tier.
+ */
+export function planCatalog(brandName: string, ownKey: ByokTierTerms): CatalogPlan[] {
+  const ownKeyPrices: CatalogPrice[] = [];
+  if (ownKey.monthlyPriceCents !== null)
+    ownKeyPrices.push({
+      interval: "month",
+      amountCents: ownKey.monthlyPriceCents,
+      lookupKey: `rakazo_byok_monthly_${ownKey.monthlyPriceCents}`,
+    });
+  if (ownKey.monthlyPriceCents !== null && ownKey.annualPriceCents !== null)
+    ownKeyPrices.push({
+      interval: "year",
+      amountCents: ownKey.annualPriceCents,
+      lookupKey: `rakazo_byok_yearly_${ownKey.annualPriceCents}`,
+    });
   return [
     {
       productId: "rakazo_plan_operator",
@@ -56,32 +72,18 @@ export function planCatalog(brandName: string): CatalogPlan[] {
     {
       productId: "rakazo_plan_own_key",
       name: `${brandName} Own Key`,
-      metadata: { tier: OWN_KEY_TIER },
-      prices: [
-        {
-          interval: "month",
-          amountCents: OWN_KEY_MONTHLY_CENTS,
-          lookupKey: `rakazo_byok_${OWN_KEY_TIER}_monthly_${OWN_KEY_MONTHLY_CENTS}`,
-        },
-        {
-          interval: "year",
-          amountCents: OWN_KEY_MONTHLY_CENTS * YEARLY_MONTHS,
-          lookupKey: `rakazo_byok_${OWN_KEY_TIER}_yearly_${OWN_KEY_MONTHLY_CENTS * YEARLY_MONTHS}`,
-        },
-      ],
+      metadata: { computer_allowance_cents: String(ownKey.computerAllowanceCents) },
+      prices: ownKeyPrices,
     },
   ];
 }
 
 /**
- * The monthly prices billing sells today: the monthly credit amount and the own-key tier's
- * monthly price. False once either constant moves, when the catalog must move with it.
+ * Whether billing still sells the Operator's monthly amount. False once that constant moves,
+ * when the catalog must move with it. The own-key plan is read from billing's own terms.
  */
 export function catalogMatchesBilling(): boolean {
-  return (
-    (MODEL_CREDIT_AMOUNTS as readonly number[]).includes(OPERATOR_MONTHLY_CENTS) &&
-    BYOK_TIERS[OWN_KEY_TIER].monthlyPriceCents === OWN_KEY_MONTHLY_CENTS
-  );
+  return (MODEL_CREDIT_AMOUNTS as readonly number[]).includes(OPERATOR_MONTHLY_CENTS);
 }
 
 export type PlanChange =

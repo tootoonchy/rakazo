@@ -80,8 +80,8 @@ recorded cost with a customer price, and the markup would be applied on top of i
 | Plan                   | Wanted                                                                         | Today                                                                                                                                                                |
 | ---------------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Operator, $200 a month | $50 fee and 15,000 credits (1 credit = $0.01, so $150) on the deployment's key | The $200 monthly credit plan with `MONTHLY_PLATFORM_FEE_CENTS=5000` grants $150 of credits, spent at `COST_MARKUP`. The balance is shown in dollars, not in credits. |
-| Own key, $99 a month   | The person's own key; only computer minutes metered                            | The existing $99 own-key tier. Calls on the person's key are not charged.                                                                                            |
-| Yearly                 | 10 times the monthly price                                                     | Own-key tiers have a yearly price, set in code at a 20% saving. Credit plans are monthly only.                                                                       |
+| Own key, $99 a month   | The person's own key; only computer minutes metered                            | The one own-key plan this brand sells (`ownKeyPlan` in the brand config), in place of upstream's tiers: $99 a month with $40 of computer time. Calls on the person's key are not charged. |
+| Yearly                 | 10 times the monthly price                                                     | Own key: $990 a year. Credit plans are monthly only.                                                                                                                 |
 
 ## Creating the plans in Stripe
 
@@ -98,7 +98,7 @@ pnpm billing:plans --apply   # makes the changes
 | Product  | Monthly | Yearly (10 months) | Lookup keys                                                    |
 | -------- | ------- | ------------------ | -------------------------------------------------------------- |
 | Operator | $200    | $2,000             | `rakazo_monthly_credits_20000`, `rakazo_yearly_credits_200000` |
-| Own Key  | $99     | $990               | `rakazo_byok_max_monthly_9900`, `rakazo_byok_max_yearly_99000` |
+| Own Key  | $99     | $990               | `rakazo_byok_monthly_9900`, `rakazo_byok_yearly_99000`         |
 
 Running it again changes nothing. A price is never edited: if an amount here changes, the script
 creates the new price, moves the lookup key to it and archives the old one, which leaves people
@@ -108,7 +108,7 @@ where it is, with its lookup key, so the people subscribed to it keep their tier
 
 Billing finds a price by its lookup key, so no price id needs to be set anywhere. The two monthly
 prices are the ones billing asks for today. The two yearly prices are not sold by the server yet:
-it has no yearly credit plan, and its yearly own-key price is still the amount in code (see below).
+it has no yearly credit plan. The own-key prices are the ones billing sells, read from the same brand config.
 
 The $50 fee inside the Operator price is not a Stripe setting. The server takes it from each
 monthly payment when `MONTHLY_PLATFORM_FEE_CENTS` is `5000`; the product's metadata records the
@@ -116,9 +116,8 @@ split for whoever reads the dashboard.
 
 ## Not built yet
 
-- **Plan names and prices are code**, in `packages/contracts/src/billing/billing.ts`. Offering
-  exactly the two plans above, with yearly at 10 times monthly for both, needs those constants
-  and the plan screens changed, and a yearly credit plan added.
+- **No yearly Operator plan.** Credit plans are monthly only, so the Operator's yearly price
+  exists in Stripe but is not sold.
 - **Computer rates are upstream's constants**, not what the computer provider really bills.
   They are the cost that `COST_MARKUP` multiplies, so check them against the provider's invoice.
 - **Own-key computer time past the allowance** is refused, not charged: only organizations on

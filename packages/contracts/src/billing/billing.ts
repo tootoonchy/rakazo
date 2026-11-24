@@ -1,4 +1,5 @@
 import * as z from "zod";
+import { BRAND } from "../brand/brand.js";
 import type { ComputerSize } from "../computers/computer.js";
 import { ComputerSizeSchema } from "../computers/computer.js";
 
@@ -52,7 +53,7 @@ export interface ByokTierTerms {
  * The own-model plan's tiers, in order. Standard is the plan new organizations start on; the
  * others add computer hours and may offer bigger computers.
  */
-export const BYOK_TIERS: Record<ByokTier, ByokTierTerms> = {
+const UPSTREAM_BYOK_TIERS: Record<ByokTier, ByokTierTerms> = {
   standard: {
     name: "Standard",
     monthlyPriceCents: 1500,
@@ -82,6 +83,18 @@ export const BYOK_TIERS: Record<ByokTier, ByokTierTerms> = {
     computerSize: "xlarge",
   },
 };
+
+/**
+ * Modified by Agental: a brand that names its own-key plan sells that plan alone. It takes
+ * Standard's place, so every organization starts on it, and no other tier is offered.
+ */
+export function byokTiers(plan: ByokTierTerms | null): Record<ByokTier, ByokTierTerms> {
+  if (!plan) return UPSTREAM_BYOK_TIERS;
+  const unsold = (tier: ByokTier) => ({ ...UPSTREAM_BYOK_TIERS[tier], monthlyPriceCents: null });
+  return { standard: plan, pro: unsold("pro"), max: unsold("max"), ultra: unsold("ultra") };
+}
+
+export const BYOK_TIERS: Record<ByokTier, ByokTierTerms> = byokTiers(BRAND.ownKeyPlan);
 
 /** The tier's price for new subscriptions billed every `interval`; null when it is not offered. */
 export function byokTierPriceCents(tier: ByokTier, interval: ByokInterval): number | null {
