@@ -73,13 +73,19 @@ export function creditsGrantedCents(
   purchase: { amountCents: number; expiresAt?: string },
   env: NodeJS.ProcessEnv = process.env,
 ): number {
+  if (!purchase.expiresAt) return purchase.amountCents;
+  return Math.max(0, purchase.amountCents - monthlyPlatformFeeCents(env));
+}
+
+/** The `MONTHLY_PLATFORM_FEE_CENTS` each monthly plan payment carries; 0 when unset. */
+export function monthlyPlatformFeeCents(env: NodeJS.ProcessEnv = process.env): number {
   const raw = env.MONTHLY_PLATFORM_FEE_CENTS?.trim();
-  if (!raw || !purchase.expiresAt) return purchase.amountCents;
+  if (!raw) return 0;
   const fee = Number(raw);
   if (!Number.isSafeInteger(fee) || fee < 0) {
     throw new Error("MONTHLY_PLATFORM_FEE_CENTS must be a whole number of cents, 0 or more");
   }
-  return Math.max(0, purchase.amountCents - fee);
+  return fee;
 }
 
 /**

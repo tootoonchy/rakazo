@@ -44,6 +44,7 @@ import type { BillingAccount, PrismaClient } from "@rakazo/db";
 import {
   billingAccountForOrganization,
   byokFreeUntil,
+  costMarkup,
   createBillingAccount,
   creditAccount,
   creditsUsedSinceAdded,
@@ -53,6 +54,7 @@ import {
   hasModelAccess,
   isOwnerRole,
   MICROS_PER_DOLLAR,
+  monthlyPlatformFeeCents,
   needsBillingPortal,
   organizationForMember,
   organizationOwnerHadTrial,
@@ -766,6 +768,8 @@ export function createBillingService(deps: {
           creditsAddedAt: creditsUsed.addedAt?.toISOString() ?? null,
           monthlyAmountCents: account?.creditAmountCents ?? null,
           creditPurchasesEnabled: deps.managedModelsAvailable ?? true,
+          monthlyPlatformFeeCents: monthlyPlatformFeeCents(),
+          creditsAtCost: costMarkup() === 1,
           byokPriceCents:
             BYOK_TIERS.standard.monthlyPriceCents &&
             (subscribed?.cents ?? BYOK_TIERS.standard.monthlyPriceCents),

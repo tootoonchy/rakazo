@@ -1,8 +1,23 @@
 # Billing for the Agental white-label
 
 Upstream sells credits at cost: a dollar paid is a dollar of credits, and a model call takes
-exactly what the provider charged. A hosted deployment that must never sell below cost needs
-three things more. This page says which are built, how they are set, and what is still missing.
+exactly what the provider charged. The hosted deployment never sells below cost. This page says
+how that is set, what a person pays and gets, and what is still missing.
+
+## What a person pays, as hosted
+
+The hosted deployment sets `COST_MARKUP=2` and `MONTHLY_PLATFORM_FEE_CENTS=5000`.
+
+| Payment | Credits granted | How credits are spent |
+| --- | --- | --- |
+| Operator, $200 a month | $150 (15,000 credits): the $50 platform fee is not credits | Model calls, and computer time when `COMPUTER_USAGE_BILLING=credits`, take twice their real cost |
+| Top-up, any amount | All of it: a top-up carries no fee | The same, at twice real cost |
+| Own Key, $99 a month | None: calls on the person's own key are not charged | Computer time comes from the plan's allowance |
+
+The plan page says this as it is: with a fee, the Credits plan reads "Includes $150 of model
+credits." instead of "All $200 goes to model usage.", and "Models at provider cost" is shown only
+when `COST_MARKUP` is 1. Both are read from the server, so a deployment without a fee or a markup
+shows upstream's copy.
 
 ## Built
 
@@ -122,12 +137,8 @@ split for whoever reads the dashboard.
   They are the cost that `COST_MARKUP` multiplies, so check them against the provider's invoice.
 - **Own-key computer time past the allowance** is refused, not charged: only organizations on
   credits have their computer time taken from credits.
-- **No alerts.** Warnings at 50, 80 and 100 percent of a client's credits do not exist.
-- **Top-up prompt.** Running out of credits sends the person to model connections, not to a
-  top-up screen.
-- **Copy.** The plan screens still say credits go to model usage at provider cost, which is not
-  true once a markup or a fee is set. That copy must change before either is switched on for
-  customers.
+- **A credit is shown in dollars.** The app shows balances, alerts and the plan page in
+  dollars ($150), not in credits (15,000). The project hub shows both.
 
 ## Tested
 

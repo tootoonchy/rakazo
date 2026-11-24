@@ -163,3 +163,20 @@ it.each([
     container.remove();
   },
 );
+
+// Modified by Agental: a deployment's monthly fee is not credits, and a markup is not cost.
+it("says what part of a monthly payment is credits, and claims provider cost only at cost", async () => {
+  const upstream = await renderChoice();
+  expect(upstream.container.textContent).toContain("goes to model usage.");
+  expect(upstream.container.textContent).toContain("Models at provider cost");
+  await act(async () => upstream.root.unmount());
+  const hosted = await renderChoice({
+    ...status,
+    monthlyPlatformFeeCents: 1000,
+    creditsAtCost: false,
+  });
+  expect(hosted.container.textContent).toContain("of model credits.");
+  expect(hosted.container.textContent).not.toContain("goes to model usage.");
+  expect(hosted.container.textContent).not.toContain("Models at provider cost");
+  await act(async () => hosted.root.unmount());
+});
