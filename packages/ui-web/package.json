@@ -8,6 +8,7 @@
     "./styles.css": "./src/styles.css",
     "./lib/utils": "./src/lib/utils.ts",
     "./components/ui/*": "./src/components/ui/*.tsx",
+    "./components/arc/*": "./src/components/arc/*",
     "./hooks/*": "./src/hooks/*.ts"
   },
   "scripts": {
@@ -31,6 +32,7 @@
   "devDependencies": {
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
+    "shadcn": "4.23.0",
     "typescript": "7.0.2",
     "vitest": "5.1.0"
   },
