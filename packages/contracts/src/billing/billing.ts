@@ -47,6 +47,11 @@ export interface ByokTierTerms {
   /** What the organization may spend on computers each month, in cents. */
   computerAllowanceCents: number;
   computerSize: ComputerSize;
+  /**
+   * Modified by Agental: false keeps the tier's terms for organizations already on it, so what
+   * they pay for still counts, but offers it to no one new.
+   */
+  sold?: false;
 }
 
 /**
@@ -86,21 +91,26 @@ const UPSTREAM_BYOK_TIERS: Record<ByokTier, ByokTierTerms> = {
 
 /**
  * Modified by Agental: a brand that names its own-key plan sells that plan alone. It takes
- * Standard's place, so every organization starts on it, and no other tier is offered.
+ * Standard's place, so every organization starts on it. The other tiers keep their terms for
+ * anyone already on one, and are offered to no one.
  */
 export function byokTiers(plan: ByokTierTerms | null): Record<ByokTier, ByokTierTerms> {
   if (!plan) return UPSTREAM_BYOK_TIERS;
-  const unsold = (tier: ByokTier) => ({ ...UPSTREAM_BYOK_TIERS[tier], monthlyPriceCents: null });
+  const unsold = (tier: ByokTier) => ({ ...UPSTREAM_BYOK_TIERS[tier], sold: false as const });
   return { standard: plan, pro: unsold("pro"), max: unsold("max"), ultra: unsold("ultra") };
 }
 
 export const BYOK_TIERS: Record<ByokTier, ByokTierTerms> = byokTiers(BRAND.ownKeyPlan);
 
 /** The tier's price for new subscriptions billed every `interval`; null when it is not offered. */
-export function byokTierPriceCents(tier: ByokTier, interval: ByokInterval): number | null {
-  if (BYOK_TIERS.standard.monthlyPriceCents === null) return null;
-  const terms = BYOK_TIERS[tier];
-  if (terms.monthlyPriceCents === null) return null;
+export function byokTierPriceCents(
+  tier: ByokTier,
+  interval: ByokInterval,
+  tiers: Record<ByokTier, ByokTierTerms> = BYOK_TIERS,
+): number | null {
+  if (tiers.standard.monthlyPriceCents === null) return null;
+  const terms = tiers[tier];
+  if (terms.monthlyPriceCents === null || terms.sold === false) return null;
   return interval === "year" ? terms.annualPriceCents : terms.monthlyPriceCents;
 }
 /**
