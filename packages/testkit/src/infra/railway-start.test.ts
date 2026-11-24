@@ -46,7 +46,7 @@ if [[ -r /proc/$PPID/environ ]]; then
   parent=no
   tr '\\0' '\\n' < /proc/$PPID/environ | grep -q '^DATABASE_MIGRATION_URL=' && parent=yes
 fi
-echo "pnpm $* owner=$owner parent=$parent" >> "$COMMAND_LOG"
+echo "pnpm $* owner=$owner parent=$parent signups=${SIGNUPS_ENABLED - unset}" >> "$COMMAND_LOG"
 [[ "$*" == *db:deploy* && -n "\${FAIL_MIGRATE:-}" ]] && exit 1
 exit 0
 `,
@@ -96,6 +96,14 @@ describe.skipIf(process.getuid?.() === 0)("Railway start script", () => {
     expect(other.lines.some((line) => line.includes("bootstrap-owner.js"))).toBe(true);
     expect(start().node).not.toContain("sandbox-environment.mjs");
     expect(start({ SANDBOX_PROVIDER: "railway" }).node).toContain("sandbox-environment.mjs");
+  });
+
+  // Modified by Agental: registration stays closed by default, and the operator can open it.
+  it("keeps registration closed unless the service opens it", () => {
+    const api = (lines: string[]) => lines.find((line) => line.includes("@rakazo/api start"));
+    expect(api(start().lines)).toContain("signups=false");
+    expect(api(start({ SIGNUPS_ENABLED: "false" }).lines)).toContain("signups=false");
+    expect(api(start({ SIGNUPS_ENABLED: "true" }).lines)).toContain("signups=true");
   });
 
   it("serves nothing when migrations fail", () => {
