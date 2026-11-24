@@ -46,7 +46,7 @@ if [[ -r /proc/$PPID/environ ]]; then
   parent=no
   tr '\\0' '\\n' < /proc/$PPID/environ | grep -q '^DATABASE_MIGRATION_URL=' && parent=yes
 fi
-echo "pnpm $* owner=$owner parent=$parent" >> "$COMMAND_LOG"
+echo "pnpm $* owner=$owner parent=$parent signups=\${SIGNUPS_ENABLED-unset}" >> "$COMMAND_LOG"
 [[ "$*" == *db:deploy* && -n "\${FAIL_MIGRATE:-}" ]] && exit 1
 exit 0
 `,
@@ -96,6 +96,21 @@ describe.skipIf(process.getuid?.() === 0)("Railway start script", () => {
     expect(other.lines.some((line) => line.includes("bootstrap-owner.js"))).toBe(true);
     expect(start().node).not.toContain("sandbox-environment.mjs");
     expect(start({ SANDBOX_PROVIDER: "railway" }).node).toContain("sandbox-environment.mjs");
+  });
+
+  // Modified by Agental: registration stays closed by default, and the operator can open it.
+  it("keeps registration closed unless the service opens it", () => {
+    // The servers start together and the script ends when the first one exits, so check
+    // whichever of them logged.
+    const servers = (overrides?: Record<string, string>) => {
+      const lines = start(overrides).lines.filter((line) => / (start|preview) /.test(line));
+      expect(lines.length).toBeGreaterThan(0);
+      return lines;
+    };
+    for (const line of servers()) expect(line).toContain("signups=false");
+    for (const line of servers({ SIGNUPS_ENABLED: "false" }))
+      expect(line).toContain("signups=false");
+    for (const line of servers({ SIGNUPS_ENABLED: "true" })) expect(line).toContain("signups=true");
   });
 
   it("serves nothing when migrations fail", () => {
